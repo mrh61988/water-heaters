@@ -276,28 +276,21 @@ with tab1:
     quick_copy_base = edited_df[edited_df["ORDER QTY"] > 0].copy()
     
     if not quick_copy_base.empty:
-        # --- 🔄 ADJUSTED LOGIC: Removed STATUS column from layout ---
         table_markdown_rows = ""
         for _, r in quick_copy_base.iterrows():
             table_markdown_rows += f"| {r['MODEL']} | {int(r['ORDER QTY'])} | ${r['BULK PRICE ONLINE']:,.2f} | ${r['NXLVL STORE PRICE']:,.2f} |\n"
 
+        # Explicit html-friendly double breaks (<br><br>) added for professional segment padding
         email_rich_template = f"""
 Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!
-
+<br><br>
 Please send payment request to my cell. 804-536-4748
-
-Thank you
-
+<br><br>
 | MODEL | ORDER QTY | BULK PRICE | STORE PRICE |
 | :--- | :--- | :--- | :--- |
 {table_markdown_rows}
 
 **Total Quantity Ordered:** {int(total_units)} unit(s)
-
-**🏪 Bulk Ordering Price**
-* Subtotal: ${base_bulk_cost:,.2f}
-* Estimated Tax (8.0%): ${bulk_tax:,.2f}
-* **TOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}**
         """
         
         st.markdown(
