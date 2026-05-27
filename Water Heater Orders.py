@@ -38,7 +38,7 @@ def load_live_data():
         url_usage_alt = f"https://docs.google.com/spreadsheets/d/{gsheet_id}/gviz/tq?tqx=out:csv&sheet=Water+Heaters+SoldIntalled"
         usage_data = pd.read_csv(url_usage_alt)
         
-    details_data = pd.read_csv(df_details)
+    details_data = pd.read_csv(url_details)
     return usage_data, details_data
 
 df, df_details = load_live_data()
@@ -566,7 +566,7 @@ with tab3:
     st.write("---")
 
     # ----------------------------------------------------
-    # SANDBOX FEATURE 7: JOB DEMAND PREDICTABILITY SCORE
+    # 🆕 NEW SANDBOX FEATURE 7: JOB DEMAND PREDICTABILITY SCORE
     # ----------------------------------------------------
     st.subheader("7. Job Demand Predictability Score (Smooth vs. Wild)")
     st.write("Analyzes historical timing intervals between installations. High variance flags chaotic demand spikes; low variance signals predictable stability.")
@@ -586,12 +586,14 @@ with tab3:
             avg_gap = row['mean']
             std_gap = row['std']
             
+            # Match current inventory count
             current_inv = inventory_lookup.get(model, 0)
             
             if pd.isna(avg_gap) or avg_gap == 0:
                 score_label = "⚪ Insufficient Data"
                 explanation = "Requires multiple unique historical job dates to evaluate patterns."
             else:
+                # Coefficient of Variation rules determine workflow categorization
                 cv = std_gap / avg_gap if std_gap > 0 else 0
                 
                 if cv > 1.2:
@@ -609,15 +611,10 @@ with tab3:
                 "CURRENT PHYSICAL STOCK": int(current_inv),
                 "AVG DAYS BETWEEN INSTALLS": "N/A" if pd.isna(avg_gap) or avg_gap == 0 else f"{avg_gap:.1f} Days",
                 "DEMAND PROFILE GRADE": score_label,
-                "OPERATIONAL GUIDANCE": explanation,
-                # 🔄 UPDATED: Added structural indexing key to control sorting logic
-                "_raw_sort_key": avg_gap if not pd.isna(avg_gap) and avg_gap > 0 else 9999
+                "OPERATIONAL GUIDANCE": explanation
             })
             
         predictability_df = pd.DataFrame(predictability_rows)
-        
-        # 🔄 UPDATED: Sorted table using our numeric raw sort key to push lowest average interval days straight to the top
-        predictability_df = predictability_df.sort_values(by="_raw_sort_key", ascending=True).drop(columns=["_raw_sort_key"])
         
         def style_predictability(val):
             if "WILD" in str(val): return 'background-color: #fce8e6; color: #a83232; font-weight: bold;'
