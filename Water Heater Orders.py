@@ -5,7 +5,7 @@ st.set_page_config(layout="wide")
 st.title("Water Heater Auto-Ordering Dashboard")
 
 # 🔗 CHANGE THIS TO YOUR ACTUAL GOOGLE SHEET URL:
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/YOUR_REAL_SHEET_ID_HERE/edit#gid=0"
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1j96q7srUuKpBtI1QUVaSvNWfhmEmKb-0xuuslE5j944/edit?usp=sharing"
 
 # Automatically extract the unique Sheet ID from your pasted link
 if "YOUR_REAL_SHEET_ID_HERE" in GOOGLE_SHEET_URL:
