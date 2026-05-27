@@ -314,8 +314,18 @@ Thank you
 # --- 🧪 TEST TAB FEATURE SANDBOX PANEL ---
 with tab3:
     st.header("🧪 Advanced Logistics Feature Sandbox")
-    st.write("Interact with prototypes of the four features using your live data below.")
+    st.write("Interact with prototypes of advanced logistical calculators using your live data metrics.")
     
+    # Global Blackout Date Rule Engine (No Sundays, No Thanksgiving, No Christmas Day)
+    def is_operational_day(check_date):
+        if check_date.weekday() == 6:  # Sunday
+            return False
+        if check_date.month == 12 and check_date.day == 25:  # Christmas
+            return False
+        if check_date.month == 11 and check_date.weekday() == 3 and (22 <= check_date.day <= 28):  # Thanksgiving (4th Thursday)
+            return False
+        return True
+
     # ----------------------------------------------------
     # SANDBOX FEATURE 1: RUNOUT TRACKER
     # ----------------------------------------------------
@@ -449,5 +459,93 @@ with tab3:
         if "⚠️" in str(val): return 'background-color: #fce8e6; color: #a83232; font-weight: bold;'
         return 'color: #2b7a4b;'
         
-    # 🔄 FIX: Enforced strict pandas string formatting rules to ensure both numeric calculation metrics match a 2 decimal layout
     st.dataframe(rop_df.style.map(style_rop, subset=["LOGISTICS TRIGGER ACTION"]).format({"DAILY SALES VELOCITY": "{:.2f}", "CALCULATED REORDER POINT (ROP)": "{:.2f}"}), hide_index=True, use_container_width=True)
+    st.write("---")
+
+    # ----------------------------------------------------
+    # NEW SANDBOX FEATURE 5: CALENDAR DEADLINES
+    # ----------------------------------------------------
+    st.subheader("5. Exact Calendar Stockout Deadlines")
+    st.write("Projects exact calendar dates when inventory drops to zero, skipping Sundays and major field holidays.")
+    
+    calendar_data = []
+    base_date = datetime.date.today()
+    
+    for index, row in master_df.iterrows():
+        model = row['Model Number']
+        net_stock = int(row['In Shop']) - int(row['Reserved'])
+        daily_vel = row['Weighted Weekly Avg'] / 7.0
+        
+        if net_stock <= 0:
+            deadline_str = "❌ OUT OF STOCK NOW"
+        elif daily_vel <= 0:
+            deadline_str = "Stable Stock (No Active Demand)"
+        else:
+            sim_stock = float(net_stock)
+            current_projected_date = base_date
+            loop_safety = 0
+            
+            while sim_stock > 0 and loop_safety < 365:
+                current_projected_date += datetime.timedelta(days=1)
+                if is_operational_day(current_projected_date):
+                    sim_stock -= daily_vel
+                loop_safety += 1
+                
+            deadline_str = current_projected_date.strftime("%B %d, %Y")
+            
+        calendar_data.append({
+            "MODEL NUMBER": model,
+            "NET AVAILABLE STOCK": net_stock,
+            "DAILY CONSUMPTION VELOCITY": daily_vel,
+            "EXPECTED STOCKOUT DEADLINE": deadline_str,
+            "_raw_days_sort": loop_safety if net_stock > 0 and daily_vel > 0 else (0 if net_stock <= 0 else 999)
+        })
+        
+    calendar_df = pd.DataFrame(calendar_data).sort_values(by="_raw_days_sort", ascending=True).drop(columns=["_raw_days_sort"])
+    st.dataframe(calendar_df.style.format({"DAILY CONSUMPTION VELOCITY": "{:.2f}"}), hide_index=True, use_container_width=True)
+    st.write("---")
+
+    # ----------------------------------------------------
+    # NEW SANDBOX FEATURE 6: WEEKDAY RUSH PLANNER
+    # ----------------------------------------------------
+    st.subheader("6. Weekday Rush Planner (48-Hour Order Scheduling)")
+    st.write("Analyzes historical construction tracking metrics to identify installation surges and coordinate procurement triggers.")
+    
+    if not df_installed.empty and 'Install Date' in df_installed.columns:
+        df_installed['Weekday_Name'] = df_installed['Install Date'].dt.day_name()
+        df_installed['Weekday_Index'] = df_installed['Install Date'].dt.weekday  # Monday=0, Sunday=6
+        
+        weekly_distribution = df_installed.groupby(['Weekday_Name', 'Weekday_Index'])['Quantity'].sum().reset_index()
+        weekly_distribution = weekly_distribution.sort_values(by="Quantity", ascending=False)
+        
+        day_indexer = {0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday", 4: "Friday", 5: "Saturday", 6: "Sunday"}
+        rush_planner_rows = []
+        
+        for _, r in weekly_distribution.iterrows():
+            if r['Weekday_Index'] == 6:  # Sunday
+                continue
+                
+            rush_day_idx = r['Weekday_Index']
+            # Subtract exactly 48 hours (2 days)
+            order_day_idx = (rush_day_idx - 2) % 7
+            
+            order_day_string = day_indexer[order_day_idx]
+            if order_day_idx == 6:  # Falls on Sunday
+                order_day_string = "Saturday Morning (Shifted due to Sunday off)"
+                
+            rush_planner_rows.append({
+                "INSTALLATION DAY": r['Weekday_Name'],
+                "HISTORICAL VOLUME RECORDED": int(r['Quantity']),
+                "48-HOUR PROCUREMENT DEADLINE": order_day_string,
+                "STRATEGIC PRIORITY STATUS": "🔥 High-Volume Spike Day" if len(rush_planner_rows) < 2 else "Standard Flow Window"
+            })
+            
+        rush_planner_df = pd.DataFrame(rush_planner_rows)
+        
+        def style_rush(val):
+            if "🔥" in str(val): return 'background-color: #fef3cd; color: #856404; font-weight: bold;'
+            return ''
+            
+        st.dataframe(rush_planner_df.style.map(style_rush, subset=["STRATEGIC PRIORITY STATUS"]), hide_index=True, use_container_width=True)
+    else:
+        st.info("Insufficient historical text records located in sheet repository to construct operational tracking metrics.")
