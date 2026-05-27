@@ -159,7 +159,7 @@ with tab2:
     st.dataframe(master_df[['Model Number', 'Weighted Weekly Avg', 'Share %', 'Target Capacity', 'In Shop', 'Reserved']])
 
 with tab1:
-    st.subheader("Weekly Bulk Order Sheet")
+    st.subheader("Master Weekly Bulk Order Sheet")
     st.write("**Click directly on any number in the `ORDER QTY` column** to reveal the **+/- buttons** or type to manually adjust.")
 
     order_sheet_data = []
@@ -194,17 +194,15 @@ with tab1:
         })
 
     order_df = pd.DataFrame(order_sheet_data)
-
-    # --- 🔄 NEW SORTING LOGIC (By Sold in Last 30 Days Descending) ---
     order_df = order_df.sort_values(by="SOLD IN LAST 30 DAYS", ascending=False)
 
-    # --- 🔄 NEW COLUMN REORDERING LOGIC (Moves ORDER QTY to 3rd Column) ---
+    # --- 🔄 MOVING ORDER QTY TO COLUMN 5 ---
     reordered_columns = [
         "STATUS",
         "MODEL",
-        "ORDER QTY",  # Pinned right here as Column #3
         "WAREHOUSE STOCK",
         "PENDING INSTALLS",
+        "ORDER QTY",  # Exactly Column #5 (Index 4)
         "INSTALLED/SOLD IN PAST 7 DAYS",
         "SOLD IN LAST 30 DAYS",
         "BULK PRICE ONLINE",
@@ -213,7 +211,6 @@ with tab1:
     ]
     order_df = order_df[reordered_columns]
 
-    # Style function for Status column
     def highlight_status(val):
         if val == "🟢 ORDER":
             return 'background-color: #d4edda; font-weight: bold; color: #155724;' 
@@ -235,6 +232,30 @@ with tab1:
     )
 
     st.divider()
+
+    # --- 📋 NEW QUICK COPY & PASTE SECTION ---
+    st.subheader("📋 Quick Copy Order Sheet (Only Ordered Items)")
+    st.write("This sheet automatically isolates models with an `ORDER QTY > 0`. Hover over the grid and click the **copy icon** in the top right to instantly paste into Excel or emails.")
+    
+    # Filter live from the edited grid state
+    quick_copy_base = edited_df[edited_df["ORDER QTY"] > 0].copy()
+    
+    # Isolate and format requested columns precisely
+    quick_copy_columns = ["STATUS", "MODEL", "ORDER QTY", "BULK PRICE ONLINE", "NXLVL STORE PRICE"]
+    quick_copy_df = quick_copy_base[quick_copy_columns].rename(columns={
+        "BULK PRICE ONLINE": "BULK PRICE",
+        "NXLVL STORE PRICE": "STORE PRICE"
+    })
+    
+    st.dataframe(
+        quick_copy_df.style.map(highlight_status, subset=["STATUS"]),
+        column_config={
+            "BULK PRICE": st.column_config.NumberColumn(format="$%.2f"),
+            "STORE PRICE": st.column_config.NumberColumn(format="$%.2f")
+        },
+        hide_index=True,
+        use_container_width=True
+    )
 
     # --- 4. EXPANDED FINANCIAL TOTALS WITH ITEMIZED 8% TAX ---
     total_units = edited_df["ORDER QTY"].sum()
