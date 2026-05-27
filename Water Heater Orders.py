@@ -311,7 +311,7 @@ Thank you
         st.info("No items currently marked for order matching the current configuration.")
 
 
-# --- 🧪 NEW TEST TAB FEATURE SANDBOX PANEL ---
+# --- 🧪 TEST TAB FEATURE SANDBOX PANEL ---
 with tab3:
     st.header("🧪 Advanced Logistics Feature Sandbox")
     st.write("Use the test sections below to interact with prototypes of the four features using your live data.")
@@ -335,7 +335,7 @@ with tab3:
         net_stock = shop_stock - reserved
         
         if daily_velocity <= 0:
-            days_left = 999  # Safe fallback if no recorded sales exist
+            days_left = 999  
         else:
             days_left = max(0, int(net_stock / daily_velocity))
             
@@ -362,7 +362,8 @@ with tab3:
         if "🟢" in str(val): return 'background-color: #d4edda; color: #155724;'
         return ''
         
-    st.dataframe(runout_df.style.applymap(style_runout, subset=["STATUS RUNOUT ALERT"]), hide_index=True, use_container_width=True)
+    # 🔄 FIX: Changed .applymap() to .map() to align with modern Pandas syntax
+    st.dataframe(runout_df.style.map(style_runout, subset=["STATUS RUNOUT ALERT"]), hide_index=True, use_container_width=True)
     st.write("---")
 
     # ----------------------------------------------------
@@ -386,7 +387,6 @@ with tab3:
     
     dead_stock_list = []
     for model, stock in inventory_lookup.items():
-        # Match back velocity tracking counters
         matched_sales = master_df[master_df['Model Number'] == model][target_col].sum()
         if stock > 0 and matched_sales == 0:
             dead_stock_list.append({
@@ -421,7 +421,6 @@ with tab3:
         daily_vel = row['Weighted Weekly Avg'] / 7.0
         current_inv = inventory_lookup.get(model, 0)
         
-        # Calculate structural reorder trigger requirements
         reorder_point = (daily_vel * param_lead_time) + (daily_vel * param_safety_cushion)
         triggered = "⚠️ ORDER NOW" if current_inv <= reorder_point else "Stock Stable"
         
@@ -439,4 +438,5 @@ with tab3:
         if "⚠️" in str(val): return 'background-color: #fce8e6; color: #a83232; font-weight: bold;'
         return 'color: #2b7a4b;'
         
-    st.dataframe(rop_df.style.applymap(style_rop, subset=["LOGISTICS TRIGGER ACTION"]), hide_index=True, use_container_width=True)
+    # 🔄 FIX: Changed .applymap() to .map() to align with modern Pandas syntax
+    st.dataframe(rop_df.style.map(style_rop, subset=["LOGISTICS TRIGGER ACTION"]), hide_index=True, use_container_width=True)
