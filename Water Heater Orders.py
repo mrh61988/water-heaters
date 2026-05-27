@@ -196,7 +196,6 @@ with tab1:
     order_df = pd.DataFrame(order_sheet_data)
     order_df = order_df.sort_values(by="SOLD IN LAST 30 DAYS", ascending=False)
 
-    # Column ordering control index matrix (ORDER QTY sits as Column 5)
     reordered_columns = [
         "STATUS",
         "MODEL",
@@ -211,8 +210,12 @@ with tab1:
     ]
     order_df = order_df[reordered_columns]
 
-    # --- 🔄 NEW HIGHLIGHT LOGIC ---
-    # Safely highlights the MODEL column whenever ORDER QTY is greater than zero
+    def highlight_status(val):
+        if val == "🟢 ORDER":
+            return 'background-color: #d4edda; font-weight: bold; color: #155724;' 
+        return ''
+
+    # Highlights Model column in master preview table if order qty > 0
     def highlight_ordered_models(df_input):
         style_df = pd.DataFrame('', index=df_input.index, columns=df_input.columns)
         mask = df_input['ORDER QTY'] > 0
@@ -270,39 +273,60 @@ with tab1:
 
     st.divider()
 
-    # --- 📋 RICH TEXT EMAIL DRAFT GENERATION ENGINE ---
+    # --- 📋 RICH TEXT EMAIL DRAFT GENERATION ENGINE WITH COLUMN-SPECIFIC HIGHLIGHTS ---
     st.subheader("✉️ Copy & Paste Rich Text Email Draft")
-    st.write("💡 Use your mouse cursor to highlight the text block and table below together, copy, and paste straight into your Gmail or Outlook composer window.")
+    st.info("💡 **How to copy:** Use your mouse cursor to highlight the text block and table below together, copy, and paste straight into your email composer window.")
     
     quick_copy_base = edited_df[edited_df["ORDER QTY"] > 0].copy()
     
     if not quick_copy_base.empty:
-        table_markdown_rows = ""
+        # Build individual table rows using pure inline HTML elements
+        html_table_rows = ""
         for _, r in quick_copy_base.iterrows():
-            table_markdown_rows += f"| {r['STATUS']} | {r['MODEL']} | {int(r['ORDER QTY'])} | ${r['BULK PRICE ONLINE']:,.2f} | ${r['NXLVL STORE PRICE']:,.2f} |\n"
+            html_table_rows += f"""
+            <tr style="border-bottom: 1px solid #eaeaea;">
+                <td style="padding: 10px; border: 1px solid #eaeaea;">{r['STATUS']}</td>
+                <td style="padding: 10px; border: 1px solid #eaeaea; background-color: #d4edda; font-weight: bold; color: #155724;">{r['MODEL']}</td>
+                <td style="padding: 10px; border: 1px solid #eaeaea; background-color: #d4edda; font-weight: bold; color: #155724; text-align: center;">{int(r['ORDER QTY'])}</td>
+                <td style="padding: 10px; border: 1px solid #eaeaea;">${r['BULK PRICE ONLINE']:,.2f}</td>
+                <td style="padding: 10px; border: 1px solid #eaeaea;">${r['NXLVL STORE PRICE']:,.2f}</td>
+            </tr>
+            """
 
-        email_rich_template = f"""
-Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!
-
-Please send payment request to my cell. 804-536-4748
-
-Thank you
-
-| STATUS | MODEL | ORDER QTY | BULK PRICE | STORE PRICE |
-| :--- | :--- | :--- | :--- | :--- |
-{table_markdown_rows}
-
-**Total Quantity Ordered:** {int(total_units)} unit(s)
-
-**🏪 Bulk Ordering Price**
-* Subtotal: ${base_bulk_cost:,.2f}
-* Estimated Tax (8.0%): ${bulk_tax:,.2f}
-* **TOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}**
+        # Generate structural HTML rich table block payload
+        email_html_body = f"""
+        <div style="font-family: Arial, sans-serif; line-height: 1.6; color: #333333; font-size: 15px;">
+            <p>Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!</p>
+            <p>Please send payment request to my cell. 804-536-4748</p>
+            <p>Thank you</p>
+            <br/>
+            <table style="border-collapse: collapse; width: 100%; max-width: 800px; border: 1px solid #eaeaea; font-family: Arial, sans-serif;">
+                <thead>
+                    <tr style="background-color: #f8f9fa; border-bottom: 2px solid #eaeaea; text-align: left; font-weight: bold;">
+                        <th style="padding: 10px; border: 1px solid #eaeaea;">STATUS</th>
+                        <th style="padding: 10px; border: 1px solid #eaeaea; background-color: #e2f0d9;">MODEL</th>
+                        <th style="padding: 10px; border: 1px solid #eaeaea; background-color: #e2f0d9; text-align: center;">ORDER QTY</th>
+                        <th style="padding: 10px; border: 1px solid #eaeaea;">BULK PRICE</th>
+                        <th style="padding: 10px; border: 1px solid #eaeaea;">STORE PRICE</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {html_table_rows}
+                </tbody>
+            </table>
+            <br/>
+            <p><strong>Total Quantity Ordered:</strong> {int(total_units)} unit(s)</p>
+            <p><strong>🏪 Bulk Ordering Price</strong><br/>
+            Subtotal: ${base_bulk_cost:,.2f}<br/>
+            Estimated Tax (8.0%): ${bulk_tax:,.2f}<br/>
+            <strong>TOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}</strong></p>
+        </div>
         """
         
+        # Display as a clean rich text layer container
         st.markdown(
-            f'<div style="background-color: #fcfcfc; padding: 25px; border-radius: 8px; border: 1px solid #eaeaea;">'
-            f'{email_rich_template}'
+            f'<div style="background-color: #ffffff; padding: 30px; border-radius: 8px; border: 1px solid #eaeaea; box-shadow: 0 1px 3px rgba(0,0,0,0.05);">'
+            f'{email_html_body}'
             f'</div>', 
             unsafe_allow_html=True
         )
