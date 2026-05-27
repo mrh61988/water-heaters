@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import datetime
 
 st.set_page_config(layout="wide")
 st.title("Water Heater Auto-Ordering Dashboard")
@@ -196,7 +197,7 @@ with tab1:
     order_df = pd.DataFrame(order_sheet_data)
     order_df = order_df.sort_values(by="SOLD IN LAST 30 DAYS", ascending=False)
 
-    # Reordering matrix columns (ORDER QTY sits as Column 5)
+    # Reordering columns matrix (ORDER QTY sits as Column 5)
     reordered_columns = [
         "STATUS",
         "MODEL",
@@ -267,39 +268,37 @@ with tab1:
 
     st.divider()
 
-    # --- 📋 QUICK COPY SECTION WITH INJECTED FINANCIAL TEXT BLOCK ---
-    st.subheader("📋 Quick Copy Order Sheet (Only Ordered Items)")
-    st.write("Click the **Copy icon** in the upper right corner of the block below to grab the item data and the financial summary simultaneously.")
+    # --- 📋 QUICK COPY EMAIL DRAFT CONTAINER ---
+    st.subheader("📋 Quick Copy Email Draft (Only Ordered Items)")
+    st.write("Click the **Copy icon** in the upper right corner of the box below to copy this fully updated procurement email.")
     
-    # Filter live values matching items to order
     quick_copy_base = edited_df[edited_df["ORDER QTY"] > 0].copy()
     
-    quick_copy_columns = ["STATUS", "MODEL", "ORDER QTY", "BULK PRICE ONLINE", "NXLVL STORE PRICE"]
-    quick_copy_df = quick_copy_base[quick_copy_columns].rename(columns={
-        "BULK PRICE ONLINE": "BULK PRICE",
-        "NXLVL STORE PRICE": "STORE PRICE"
-    })
-    
-    if not quick_copy_df.empty:
-        copy_formatted_df = quick_copy_df.copy()
-        copy_formatted_df["BULK PRICE"] = copy_formatted_df["BULK PRICE"].map(lambda x: f"${x:,.2f}")
-        copy_formatted_df["STORE PRICE"] = copy_formatted_df["STORE PRICE"].map(lambda x: f"${x:,.2f}")
-        
-        # Core tabular text layer
-        tab_separated_text = copy_formatted_df.to_csv(index=False, sep='\t')
-        
-        # 💰 Dynamic Financial Text Appended underneath the table payload
-        financials_copy_block = (
-            f"\n"
+    if not quick_copy_base.empty:
+        # Create clear bulleted item rows for the email message body
+        email_items_list = ""
+        for _, r in quick_copy_base.iterrows():
+            email_items_list += f"• Model: {r['MODEL']} | Quantity to Order: {int(r['ORDER QTY'])} unit(s) (Bulk Price: ${r['BULK PRICE ONLINE']:,.2f} / unit)\n"
+            
+        # Get dynamic formatted date
+        todays_date_str = datetime.date.today().strftime("%m/%d/%Y")
+
+        # Compile customized cleaner email text template structure
+        beautiful_email_draft = (
+            f"Subject: Lowes Water Heater Order: Brincor/NexLvl and {todays_date_str}\n\n"
+            f"Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!\n\n"
+            f"Please send payment request to my cell. 804-536-4748\n\n"
+            f"Thank you\n\n"
+            f"📦 MANIFEST ITEMS TO ORDER:\n"
+            f"{email_items_list}\n"
+            f"Total Quantity Ordered: {int(total_units)} unit(s)\n\n"
             f"🏪 Bulk Ordering Price\n"
             f"Subtotal: ${base_bulk_cost:,.2f}\n"
             f"Estimated Tax (8.0%): ${bulk_tax:,.2f}\n"
-            f"TOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}\n"
-            f"Total Quantity Ordered: {int(total_units)} unit(s)"
+            f"TOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}"
         )
         
-        full_clipboard_payload = tab_separated_text + financials_copy_block
-        
-        st.code(full_clipboard_payload, language="text")
+        st.caption("📋 Click the clipboard icon in the top right of this box to copy your email draft:")
+        st.code(beautiful_email_draft, language="text")
     else:
         st.info("No items currently marked for order matching the current configuration.")
