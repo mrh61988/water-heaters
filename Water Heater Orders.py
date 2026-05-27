@@ -95,10 +95,11 @@ if target_mode == "💰 Budget Goal ($)":
 else:
     target_total_inventory = st.sidebar.slider("Target Total Warehouse Capacity", min_value=10, max_value=100, value=25)
 
+# 🔄 UPDATED: Swapped out sliders for clean, scannable numeric text input boxes
 st.sidebar.subheader("Usage Weighting (%)")
-weight_7d = st.sidebar.slider("Last 7 Days Weight", 0, 100, 60) 
-weight_30d = st.sidebar.slider("Last 30 Days Weight", 0, 100, 30) 
-weight_all = st.sidebar.slider("All-Time Weight", 0, 100, 10)    
+weight_7d = st.sidebar.number_input("Last 7 Days Weight", min_value=0, max_value=100, value=60, step=1) 
+weight_30d = st.sidebar.number_input("Last 30 Days Weight", min_value=0, max_value=100, value=30, step=1) 
+weight_all = st.sidebar.number_input("All-Time Weight", min_value=0, max_value=100, value=10, step=1)    
 
 if (weight_7d + weight_30d + weight_all) != 100:
     st.sidebar.error("Weights must add up to 100%. Adjust to activate calculations.")
@@ -566,18 +567,16 @@ with tab3:
     st.write("---")
 
     # ----------------------------------------------------
-    # 🆕 NEW SANDBOX FEATURE 7: JOB DEMAND PREDICTABILITY SCORE
+    # SANDBOX FEATURE 7: JOB DEMAND PREDICTABILITY SCORE
     # ----------------------------------------------------
     st.subheader("7. Job Demand Predictability Score (Smooth vs. Wild)")
     st.write("Analyzes historical timing intervals between installations. High variance flags chaotic demand spikes; low variance signals predictable stability.")
 
     if not df_installed.empty:
-        # Sort data chronologically to calculate true days passed between jobs
         df_sorted = df_installed.sort_values(['Model Number', 'Install Date']).copy()
         df_sorted['Prev_Install_Date'] = df_sorted.groupby('Model Number')['Install Date'].shift(1)
         df_sorted['Days_Between'] = (df_sorted['Install Date'] - df_sorted['Prev_Install_Date']).dt.days
 
-        # Aggregate interval spacing metrics per model structure
         gap_stats = df_sorted.groupby('Model Number')['Days_Between'].agg(['mean', 'std']).reset_index()
         
         predictability_rows = []
@@ -586,14 +585,12 @@ with tab3:
             avg_gap = row['mean']
             std_gap = row['std']
             
-            # Match current inventory count
             current_inv = inventory_lookup.get(model, 0)
             
             if pd.isna(avg_gap) or avg_gap == 0:
                 score_label = "⚪ Insufficient Data"
                 explanation = "Requires multiple unique historical job dates to evaluate patterns."
             else:
-                # Coefficient of Variation rules determine workflow categorization
                 cv = std_gap / avg_gap if std_gap > 0 else 0
                 
                 if cv > 1.2:
@@ -611,10 +608,12 @@ with tab3:
                 "CURRENT PHYSICAL STOCK": int(current_inv),
                 "AVG DAYS BETWEEN INSTALLS": "N/A" if pd.isna(avg_gap) or avg_gap == 0 else f"{avg_gap:.1f} Days",
                 "DEMAND PROFILE GRADE": score_label,
-                "OPERATIONAL GUIDANCE": explanation
+                "OPERATIONAL GUIDANCE": explanation,
+                "_raw_sort_key": avg_gap if not pd.isna(avg_gap) and avg_gap > 0 else 9999
             })
             
         predictability_df = pd.DataFrame(predictability_rows)
+        predictability_df = predictability_df.sort_values(by="_raw_sort_key", ascending=True).drop(columns=["_raw_sort_key"])
         
         def style_predictability(val):
             if "WILD" in str(val): return 'background-color: #fce8e6; color: #a83232; font-weight: bold;'
