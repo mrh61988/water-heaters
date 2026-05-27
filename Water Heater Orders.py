@@ -338,6 +338,9 @@ with tab3:
         else:
             days_left = max(0, int(net_stock / daily_velocity))
             
+        if net_stock <= 0:
+            days_left = 0
+            
         if days_left <= 3:
             alert = "🔴 CRITICAL STOCK"
         elif days_left <= 8:
@@ -345,17 +348,22 @@ with tab3:
         else:
             alert = "🟢 HEALTHY"
             
-        # 🔄 UPDATED: Explicitly added raw 'CURRENT PHYSICAL STOCK' into the columns array
+        # 🔄 UPDATED: Inserted PENDING INSTALLS and created a temporary sorting metric key
         runout_data.append({
             "MODEL": model,
             "CURRENT PHYSICAL STOCK": shop_stock,
+            "PENDING INSTALLS": reserved,
             "NET AVAILABLE STOCK": net_stock,
             "DAILY VELOCITY": round(daily_velocity, 2),
             "EST. DAYS LEFT": "STOCKED OUT" if net_stock <= 0 else (f"{days_left} Days" if days_left < 365 else "Stable Stock"),
-            "STATUS RUNOUT ALERT": alert
+            "STATUS RUNOUT ALERT": alert,
+            "_raw_sort_key": days_left
         })
     
     runout_df = pd.DataFrame(runout_data)
+    
+    # 🔄 UPDATED: Sorted table automatically by days remaining (lowest to highest)
+    runout_df = runout_df.sort_values(by="_raw_sort_key", ascending=True).drop(columns=["_raw_sort_key"])
     
     def style_runout(val):
         if "🔴" in str(val): return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
@@ -372,7 +380,6 @@ with tab3:
     st.subheader("2. Sales Visualizer (What's Hot)")
     st.write("An instant text grid showing your sales volume, sorted from highest to lowest volume automatically.")
     
-    # 🔄 UPDATED: Swapped the graph block out for an elegantly ordered text dataframe view
     sales_table_df = master_df[['Model Number', 'Sold 30D']].copy()
     sales_table_df = sales_table_df.sort_values(by='Sold 30D', ascending=False)
     sales_table_df.columns = ["MODEL NUMBER", "UNITS SOLD (PAST 30 DAYS)"]
@@ -414,7 +421,6 @@ with tab3:
     
     col_lead, col_cushion = st.columns(2)
     with col_lead:
-        # Pinned default delivery metric to 2 days (reflecting your 48-hour delivery parameter)
         param_lead_time = st.number_input("Supplier Delivery Lead Time (Days)", min_value=1, max_value=14, value=2)
     with col_cushion:
         param_safety_cushion = st.number_input("Mandatory Safety Stock Cushion (Days of Sales)", min_value=1, max_value=14, value=4)
