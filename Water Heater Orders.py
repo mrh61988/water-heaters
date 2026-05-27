@@ -4,13 +4,16 @@ import pandas as pd
 st.set_page_config(layout="wide")
 st.title("Water Heater Auto-Ordering Dashboard")
 
-# 🔗 CHANGE THIS TO YOUR ACTUAL GOOGLE SHEET URL:
+# 🔗 Connected Live Google Sheet URL
 GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1j96q7srUuKpBtI1QUVaSvNWfhmEmKb-0xuuslE5j944/edit?usp=sharing"
 
-# Automatically extract the unique Sheet ID from your pasted link
-if "YOUR_REAL_SHEET_ID_HERE" in GOOGLE_SHEET_URL:
-    st.warning("⚠️ Please open `app.py` and replace the placeholder URL with your real Google Sheet link to see your live data!")
-    st.stop()
+# --- 1. TOP-OF-PAGE CACHE REFRESH ENGINE ---
+st.write("If you just updated numbers on your Google Sheet, click below to force an immediate cloud sync:")
+if st.button("🔄 Refresh Data From Google Sheets", type="primary"):
+    st.cache_data.clear()
+    st.rerun()
+
+st.divider()
 
 try:
     if "/d/" in GOOGLE_SHEET_URL:
@@ -21,12 +24,12 @@ except Exception:
     st.error("Invalid Google Sheet URL format. Make sure it looks like a standard browser link.")
     st.stop()
 
-# Build the direct multi-tab extraction streams
+# Build direct multi-tab extraction streams
 url_usage = f"https://docs.google.com/spreadsheets/d/{gsheet_id}/gviz/tq?tqx=out:csv&sheet=Water+Heaters+Sold_Intalled"
 url_details = f"https://docs.google.com/spreadsheets/d/{gsheet_id}/gviz/tq?tqx=out:csv&sheet=Water+Heater+Details"
 
-# --- 1. DATA EXTRACTION WITH REFRESH FEATURE ---
-@st.cache_data(ttl=60)  # Caches data for 60 seconds unless the refresh button is clicked
+# Data extraction engine
+@st.cache_data(ttl=60)
 def load_live_data():
     try:
         usage_data = pd.read_csv(url_usage)
@@ -74,17 +77,25 @@ date_30_days_ago = max_date - pd.Timedelta(days=30)
 date_7_days_ago = max_date - pd.Timedelta(days=7)
 total_weeks = (max_date - min_date).days / 7 if (max_date - min_date).days > 0 else 1
 
-# Sidebar Settings
+# --- SIDEBAR SETTINGS ---
 st.sidebar.header("Warehouse & Order Settings")
-target_total_inventory = st.sidebar.slider("Target Total Warehouse Capacity", min_value=10, max_value=50, value=25)
+
+# Targeting mode choice
+target_mode = st.sidebar.selectbox("Suggested Quantity Targeting Mode", ["💰 Budget Goal ($)", "📦 Warehouse Capacity (Units)"])
+
+if target_mode == "💰 Budget Goal ($)":
+    price_goal = st.sidebar.number_input("Total Order Price Goal (with tax)", min_value=500, max_value=50000, value=6500, step=500)
+else:
+    target_total_inventory = st.sidebar.slider("Target Total Warehouse Capacity", min_value=10, max_value=100, value=25)
 
 st.sidebar.subheader("Usage Weighting (%)")
-weight_7d = st.sidebar.slider("Last 7 Days Weight", 0, 100, 50)
-weight_30d = st.sidebar.slider("Last 30 Days Weight", 0, 100, 30)
-weight_all = st.sidebar.slider("All-Time Weight", 0, 100, 20)
+weight_7d = st.sidebar.slider("Last 7 Days Weight", 0, 100, 60) # Defaulted to 60
+weight_30d = st.sidebar.slider("Last 30 Days Weight", 0, 100, 30) # Defaulted to 30
+weight_all = st.sidebar.slider("All-Time Weight", 0, 100, 10)    # Defaulted to 10
 
 if (weight_7d + weight_30d + weight_all) != 100:
-    st.sidebar.error("Weights must add up to 100%.")
+    st.sidebar.error("Weights must add up to 100%. Adjust to activate calculations.")
+    st.stop()
 
 # Timeframe Aggregations
 all_time = df_installed.groupby('Model Number')['Quantity'].sum().reset_index()
@@ -102,26 +113,51 @@ master_df = pd.merge(master_df, usage_30d, on='Model Number', how='left').rename
 master_df = pd.merge(master_df, usage_7d, on='Model Number', how='left').rename(columns={'Quantity': 'Sold 7D'}).fillna(0)
 master_df = master_df.sort_values(by='Quantity_x', ascending=False).head(8).reset_index(drop=True)
 
-# Weights & Capacity Target
+# Weights & Allocation Calculations
 w_7d, w_30d, w_all = weight_7d / 100.0, weight_30d / 100.0, weight_all / 100.0
 master_df['Weighted Weekly Avg'] = (master_df['7D Weekly Avg'] * w_7d) + (master_df['30D Weekly Avg'] * w_30d) + (master_df['All Time Weekly Avg'] * w_all)
 
-total_weighted_avg = master_df['Weighted Weekly Avg'].sum()
+total_weighted_avg = master_df['Weighted Weekly Avg'].sum() if master_df['Weighted Weekly Avg'].sum() > 0 else 1
 master_df['Share %'] = master_df['Weighted Weekly Avg'] / total_weighted_avg
-master_df['Target Capacity'] = (master_df['Share %'] * target_total_inventory).round().astype(int)
 
 master_df = pd.merge(master_df, reserved_stock, on='Model Number', how='left').fillna(0)
+master_df['In Shop'] = master_df['Model Number'].map(inventory_lookup).fillna(0).astype(int)
+master_df['Bulk Price'] = master_df['Model Number'].map(bulk_lookup).fillna(0)
 
-# --- 3. UI TABS ---
+TAX_RATE = 0.08
+
+# --- AUTOMATED BUDGET SOLVER LOOP ---
+if target_mode == "💰 Budget Goal ($)":
+    best_capacity = 0
+    closest_diff = float('inf')
+    
+    # Iterate through possible physical target sizes to find the mix that closest hits the dollar budget
+    for test_capacity in range(0, 500):
+        test_targets = (master_df['Share %'] * test_capacity).round().astype(int)
+        test_effective = master_df['In Shop'] - master_df['Reserved']
+        test_orders = (test_targets - test_effective).clip(lower=0)
+        test_cost = (test_orders * master_df['Bulk Price']).sum() * (1 + TAX_RATE)
+        
+        diff = abs(test_cost - price_goal)
+        if diff < closest_diff:
+            closest_diff = diff
+            best_capacity = test_capacity
+            
+    master_df['Target Capacity'] = (master_df['Share %'] * best_capacity).round().astype(int)
+else:
+    master_df['Target Capacity'] = (master_df['Share %'] * target_total_inventory).round().astype(int)
+
+
+# --- 3. UI TAB PANELS ---
 tab1, tab2 = st.tabs(["📋 Interactive Order Sheet", "📊 Forecasting Breakdown"])
 
 with tab2:
     st.subheader("Data & Forecast Breakdown")
-    st.dataframe(master_df[['Model Number', 'Weighted Weekly Avg', 'Target Capacity', 'Reserved']])
+    st.dataframe(master_df[['Model Number', 'Weighted Weekly Avg', 'Share %', 'Target Capacity', 'In Shop', 'Reserved']])
 
 with tab1:
     st.subheader("Weekly Bulk Order Sheet")
-    st.write("**Click directly on any number in the `ORDER QTY` column** to reveal the **+/- buttons** and manually adjust your order.")
+    st.write("**Click directly on any number in the `ORDER QTY` column** to reveal the **+/- buttons** or type to manually adjust.")
 
     order_sheet_data = []
     
@@ -131,14 +167,13 @@ with tab1:
         reserved = int(row['Reserved'])
         sold_7d = int(row['Sold 7D'])
         sold_30d = int(row['Sold 30D'])
+        current_inv = int(row['In Shop'])
         
         bulk_price = bulk_lookup.get(model, 0.0)
         store_price = store_lookup.get(model, 0.0)
         savings = max(0, store_price - bulk_price)
         
-        current_inv = int(inventory_lookup.get(model, 0))
         effective_inv = current_inv - reserved
-        
         order_amt = max(0, target_inv - effective_inv)
         status = "🟢 ORDER" if order_amt > 0 else "✔️ OK"
         
@@ -157,7 +192,6 @@ with tab1:
 
     order_df = pd.DataFrame(order_sheet_data)
 
-    # Highlighting the STATUS column since coloring the editable column locks the manual entry features.
     def highlight_status(val):
         if val == "🟢 ORDER":
             return 'background-color: #d4edda; font-weight: bold; color: #155724;' 
@@ -165,7 +199,6 @@ with tab1:
 
     styled_order_df = order_df.style.map(highlight_status, subset=["STATUS"])
 
-    # Interactive Data Editor with step=1 for plus/minus configuration
     edited_df = st.data_editor(
         styled_order_df,
         column_config={
@@ -181,37 +214,36 @@ with tab1:
 
     st.divider()
 
-    # --- 4. FINANCIAL TOTALS (WITH 8% TAX ADDED) ---
-    TAX_RATE = 0.08
-
+    # --- 4. EXPANDED FINANCIAL TOTALS WITH ITEMIZED 8% TAX ---
     total_units = edited_df["ORDER QTY"].sum()
     
-    # Calculate Base Costs
     base_bulk_cost = (edited_df["ORDER QTY"] * edited_df["BULK PRICE ONLINE"]).sum()
+    bulk_tax = base_bulk_cost * TAX_RATE
+    total_bulk_cost_with_tax = base_bulk_cost + bulk_tax
+    
     base_store_cost = (edited_df["ORDER QTY"] * edited_df["NXLVL STORE PRICE"]).sum()
+    store_tax = base_store_cost * TAX_RATE
+    total_store_cost_with_tax = base_store_cost + store_tax
     
-    # Apply 8% Tax Multipliers
-    total_bulk_cost_with_tax = base_bulk_cost * (1 + TAX_RATE)
-    total_store_cost_with_tax = base_store_cost * (1 + TAX_RATE)
-    total_savings = total_store_cost_with_tax - total_bulk_cost_with_tax
+    net_savings = total_store_cost_with_tax - total_bulk_cost_with_tax
 
-    st.subheader("Order Financial Summary (Includes 8% Tax)")
+    st.subheader("Order Financial Summary")
     
-    col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Heaters Ordered", int(total_units))
-    col2.metric("Bulk Order Total (+8% Tax)", f"${total_bulk_cost_with_tax:,.2f}")
-    col3.metric("Store Price Total (+8% Tax)", f"${total_store_cost_with_tax:,.2f}")
+    col_bulk, col_store, col_summary = st.columns(3)
     
-    if total_savings > 0:
-        col4.metric("Net Financial Savings", f"${total_savings:,.2f}")
-    else:
-        col4.metric("Net Financial Savings", "$0.00")
-
-    st.divider()
-    
-    # --- 5. THE CACHE REFRESH BUTTON ENGINE ---
-    # Placing it at the bottom makes it cleanly accessible after verifying the order data
-    st.write("If you just updated numbers on your Google Sheet, click below to force an immediate sync:")
-    if st.button("🔄 Refresh Data From Google Sheets", type="primary"):
-        st.cache_data.clear() # Wipes out the app's internal snapshot memory
-        st.rerun()            # Forces the entire script to execute fresh from the cloud URL
+    with col_bulk:
+        st.markdown("### 🏪 Bulk Ordering Price")
+        st.write(f"**Subtotal:** ${base_bulk_cost:,.2f}")
+        st.write(f"**Estimated Tax (8.0%):** ${bulk_tax:,.2f}")
+        st.markdown(f"**TOTAL BULK COST:** `${total_bulk_cost_with_tax:,.2f}`")
+        
+    with col_store:
+        st.markdown("### 🏢 Regular Store Price")
+        st.write(f"**Subtotal:** ${base_store_cost:,.2f}")
+        st.write(f"**Estimated Tax (8.0%):** ${store_tax:,.2f}")
+        st.markdown(f"**TOTAL STORE COST:** `${total_store_cost_with_tax:,.2f}`")
+        
+    with col_summary:
+        st.markdown("### 📈 Order Volume Metrics")
+        st.metric("Total Heaters Selected", int(total_units))
+        st.metric("Net Financial Savings", f"${max(0.0, net_savings):,.2f}")
