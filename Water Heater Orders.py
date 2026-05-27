@@ -42,9 +42,13 @@ def load_live_data():
 
 df, df_details = load_live_data()
 
+# --- MODEL NUMBER CLEANING FUNCTION (Removes .0 decimals) ---
+def clean_model_ids(series):
+    return series.astype(str).str.strip().str.replace(r'\.0$', '', regex=True)
+
 # Clean Usage Data Columns
 df.columns = df.columns.str.strip()
-df['Model Number'] = df['Model Number'].astype(str).str.strip()
+df['Model Number'] = clean_model_ids(df['Model Number'])
 df = df[df['Model Number'] != 'nan']
 df['Install Date'] = pd.to_datetime(df['Scheduled/ Completed Install Date'], errors='coerce')
 
@@ -62,7 +66,7 @@ store_lookup = df[df['Store Price'] > 0].drop_duplicates('Model Number', keep='f
 
 # Clean Current Inventory Data
 df_details.columns = df_details.columns.str.strip()
-df_details['Model'] = df_details['Model'].astype(str).str.strip()
+df_details['Model'] = clean_model_ids(df_details['Model'])
 inventory_lookup = df_details.set_index('Model')['Counted Inventory'].fillna(0).to_dict()
 
 # --- 2. FORECAST CALCULATIONS ---
@@ -89,9 +93,9 @@ else:
     target_total_inventory = st.sidebar.slider("Target Total Warehouse Capacity", min_value=10, max_value=100, value=25)
 
 st.sidebar.subheader("Usage Weighting (%)")
-weight_7d = st.sidebar.slider("Last 7 Days Weight", 0, 100, 60) # Defaulted to 60
-weight_30d = st.sidebar.slider("Last 30 Days Weight", 0, 100, 30) # Defaulted to 30
-weight_all = st.sidebar.slider("All-Time Weight", 0, 100, 10)    # Defaulted to 10
+weight_7d = st.sidebar.slider("Last 7 Days Weight", 0, 100, 60) 
+weight_30d = st.sidebar.slider("Last 30 Days Weight", 0, 100, 30) 
+weight_all = st.sidebar.slider("All-Time Weight", 0, 100, 10)    
 
 if (weight_7d + weight_30d + weight_all) != 100:
     st.sidebar.error("Weights must add up to 100%. Adjust to activate calculations.")
@@ -131,7 +135,6 @@ if target_mode == "💰 Budget Goal ($)":
     best_capacity = 0
     closest_diff = float('inf')
     
-    # Iterate through possible physical target sizes to find the mix that closest hits the dollar budget
     for test_capacity in range(0, 500):
         test_targets = (master_df['Share %'] * test_capacity).round().astype(int)
         test_effective = master_df['In Shop'] - master_df['Reserved']
@@ -184,7 +187,7 @@ with tab1:
             "PENDING INSTALLS": reserved,
             "ORDER QTY": order_amt, 
             "INSTALLED/SOLD IN PAST 7 DAYS": sold_7d,
-            "SOLD IN LAST 30 DAYS": sold_30d,
+            "SOLD IN LAST 30 DAYS": sold_30d, # Verified precise column matching name
             "BULK PRICE ONLINE": bulk_price,
             "NXLVL STORE PRICE": store_price,
             "SAVINGS": savings
