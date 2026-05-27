@@ -285,9 +285,8 @@ with tab1:
         email_rich_template = f"""
 Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!
 
-Please send payment request to my cell. 804-536-4748
 
-Thank you
+Please send payment request to my cell. 804-536-4748
 
 | MODEL | ORDER QTY | BULK PRICE | STORE PRICE |
 | :--- | :--- | :--- | :--- |
