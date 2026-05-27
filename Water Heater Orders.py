@@ -350,7 +350,6 @@ with tab3:
         else:
             alert = "🟢 HEALTHY"
             
-        # 🔄 UPDATED: Added historical 'SOLD IN PAST 7 DAYS' and 'SOLD IN PAST 30 DAYS' counters
         runout_data.append({
             "MODEL": model,
             "CURRENT PHYSICAL STOCK": shop_stock,
@@ -358,7 +357,7 @@ with tab3:
             "NET AVAILABLE STOCK": net_stock,
             "SOLD IN PAST 7 DAYS": sold_7d,
             "SOLD IN PAST 30 DAYS": sold_30d,
-            "DAILY VELOCITY": round(daily_velocity, 2),
+            "DAILY VELOCITY": daily_velocity,
             "EST. DAYS LEFT": "STOCKED OUT" if net_stock <= 0 else (f"{days_left} Days" if days_left < 365 else "Stable Stock"),
             "STATUS RUNOUT ALERT": alert,
             "_raw_sort_key": days_left
@@ -373,7 +372,8 @@ with tab3:
         if "🟢" in str(val): return 'background-color: #d4edda; color: #155724;'
         return ''
         
-    st.dataframe(runout_df.style.map(style_runout, subset=["STATUS RUNOUT ALERT"]), hide_index=True, use_container_width=True)
+    # 🔄 FIX: Enforced standard strict pandas style formatting pattern for exactly 2 decimal points on the generic velocity floats
+    st.dataframe(runout_df.style.map(style_runout, subset=["STATUS RUNOUT ALERT"]).format({"DAILY VELOCITY": "{:.2f}"}), hide_index=True, use_container_width=True)
     st.write("---")
 
     # ----------------------------------------------------
