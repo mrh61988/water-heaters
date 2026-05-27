@@ -280,7 +280,7 @@ with tab1:
         for _, r in quick_copy_base.iterrows():
             table_markdown_rows += f"| {r['MODEL']} | {int(r['ORDER QTY'])} | ${r['BULK PRICE ONLINE']:,.2f} | ${r['NXLVL STORE PRICE']:,.2f} |\n"
 
-        # --- 🔄 ADJUSTED LOGIC: Removed ** bold syntax to maintain 100% uniform font weight, size, and style ---
+        # --- 🔄 ADJUSTED LOGIC: Pure Markdown alignment eliminates style divergences ---
         email_rich_template = f"""
 Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!
 
@@ -293,10 +293,12 @@ Thank you
 {table_markdown_rows}
 
 **Total Quantity Ordered:** {int(total_units)} unit(s)
-<br><br>
-Subtotal: ${base_bulk_cost:,.2f}<br>
-Estimated Tax (8.0%): ${bulk_tax:,.2f}<br>
-TOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}
+
+**Subtotal:** ${base_bulk_cost:,.2f}
+
+**Estimated Tax (8.0%):** ${bulk_tax:,.2f}
+
+**TOTAL BULK COST:** ${total_bulk_cost_with_tax:,.2f}
         """
         
         st.markdown(
