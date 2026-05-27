@@ -5,7 +5,7 @@ st.set_page_config(layout="wide")
 st.title("Water Heater Auto-Ordering Dashboard")
 
 # 🔗 CHANGE THIS TO YOUR ACTUAL GOOGLE SHEET URL:
-GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/1j96q7srUuKpBtI1QUVaSvNWfhmEmKb-0xuuslE5j944/edit?usp=sharing"
+GOOGLE_SHEET_URL = "https://docs.google.com/spreadsheets/d/YOUR_REAL_SHEET_ID_HERE/edit#gid=0"
 
 # Automatically extract the unique Sheet ID from your pasted link
 if "YOUR_REAL_SHEET_ID_HERE" in GOOGLE_SHEET_URL:
@@ -25,10 +25,9 @@ except Exception:
 url_usage = f"https://docs.google.com/spreadsheets/d/{gsheet_id}/gviz/tq?tqx=out:csv&sheet=Water+Heaters+Sold_Intalled"
 url_details = f"https://docs.google.com/spreadsheets/d/{gsheet_id}/gviz/tq?tqx=out:csv&sheet=Water+Heater+Details"
 
-# --- 1. DATA EXTRACTION FROM CLOUD ---
-@st.cache_data(ttl=60) # Caches the data for 60 seconds so it doesn't slam Google servers on every click
+# --- 1. DATA EXTRACTION WITH REFRESH FEATURE ---
+@st.cache_data(ttl=60)  # Caches data for 60 seconds unless the refresh button is clicked
 def load_live_data():
-    # Attempt extraction using alternative sheet tab spelling if first one fails
     try:
         usage_data = pd.read_csv(url_usage)
     except Exception:
@@ -122,7 +121,7 @@ with tab2:
 
 with tab1:
     st.subheader("Weekly Bulk Order Sheet")
-    st.write("**Click on any number in the `ORDER QTY` column** to reveal the +/- buttons and manually adjust your order.")
+    st.write("**Click directly on any number in the `ORDER QTY` column** to reveal the **+/- buttons** and manually adjust your order.")
 
     order_sheet_data = []
     
@@ -149,15 +148,16 @@ with tab1:
             "WAREHOUSE STOCK": current_inv,
             "PENDING INSTALLS": reserved,
             "ORDER QTY": order_amt, 
-            "SOLD PAST 7 DAYS": sold_7d,
-            "SOLD LAST 30 DAYS": sold_30d,
+            "INSTALLED/SOLD IN PAST 7 DAYS": sold_7d,
+            "SOLD IN LAST 30 DAYS": sold_30d,
             "BULK PRICE ONLINE": bulk_price,
             "NXLVL STORE PRICE": store_price,
-            "SAVINGS (PER UNIT)": savings
+            "SAVINGS": savings
         })
 
     order_df = pd.DataFrame(order_sheet_data)
 
+    # Highlighting the STATUS column since coloring the editable column locks the manual entry features.
     def highlight_status(val):
         if val == "🟢 ORDER":
             return 'background-color: #d4edda; font-weight: bold; color: #155724;' 
@@ -165,28 +165,32 @@ with tab1:
 
     styled_order_df = order_df.style.map(highlight_status, subset=["STATUS"])
 
+    # Interactive Data Editor with step=1 for plus/minus configuration
     edited_df = st.data_editor(
         styled_order_df,
         column_config={
             "ORDER QTY": st.column_config.NumberColumn("ORDER QTY ✏️", min_value=0, step=1),
             "BULK PRICE ONLINE": st.column_config.NumberColumn(format="$%.2f"),
             "NXLVL STORE PRICE": st.column_config.NumberColumn(format="$%.2f"),
-            "SAVINGS (PER UNIT)": st.column_config.NumberColumn(format="$%.2f"),
+            "SAVINGS": st.column_config.NumberColumn(format="$%.2f"),
         },
-        disabled=["STATUS", "MODEL", "WAREHOUSE STOCK", "PENDING INSTALLS", "SOLD PAST 7 DAYS", "SOLD LAST 30 DAYS", "BULK PRICE ONLINE", "NXLVL STORE PRICE", "SAVINGS (PER UNIT)"],
+        disabled=["STATUS", "MODEL", "WAREHOUSE STOCK", "PENDING INSTALLS", "INSTALLED/SOLD IN PAST 7 DAYS", "SOLD IN LAST 30 DAYS", "BULK PRICE ONLINE", "NXLVL STORE PRICE", "SAVINGS"],
         hide_index=True,
         use_container_width=True
     )
 
     st.divider()
 
-    # --- 4. FINANCIAL TOTALS (WITH TAX) ---
+    # --- 4. FINANCIAL TOTALS (WITH 8% TAX ADDED) ---
     TAX_RATE = 0.08
 
     total_units = edited_df["ORDER QTY"].sum()
+    
+    # Calculate Base Costs
     base_bulk_cost = (edited_df["ORDER QTY"] * edited_df["BULK PRICE ONLINE"]).sum()
     base_store_cost = (edited_df["ORDER QTY"] * edited_df["NXLVL STORE PRICE"]).sum()
     
+    # Apply 8% Tax Multipliers
     total_bulk_cost_with_tax = base_bulk_cost * (1 + TAX_RATE)
     total_store_cost_with_tax = base_store_cost * (1 + TAX_RATE)
     total_savings = total_store_cost_with_tax - total_bulk_cost_with_tax
@@ -194,12 +198,20 @@ with tab1:
     st.subheader("Order Financial Summary (Includes 8% Tax)")
     
     col1, col2, col3, col4 = st.columns(4)
-    col1.metric("Total Heaters", int(total_units))
-    col2.metric("Bulk Order Cost (+Tax)", f"${total_bulk_cost_with_tax:,.2f}")
-    st.button("🔄 Refresh Data From Google Sheets") # A refresh button forces Streamlit to re-download the link instantly
-    col3.metric("Store Price Cost (+Tax)", f"${total_store_cost_with_tax:,.2f}")
+    col1.metric("Total Heaters Ordered", int(total_units))
+    col2.metric("Bulk Order Total (+8% Tax)", f"${total_bulk_cost_with_tax:,.2f}")
+    col3.metric("Store Price Total (+8% Tax)", f"${total_store_cost_with_tax:,.2f}")
     
     if total_savings > 0:
-        col4.metric("Money Saved vs Store", f"${total_savings:,.2f}")
+        col4.metric("Net Financial Savings", f"${total_savings:,.2f}")
     else:
-        col4.metric("Money Saved vs Store", "$0.00")
+        col4.metric("Net Financial Savings", "$0.00")
+
+    st.divider()
+    
+    # --- 5. THE CACHE REFRESH BUTTON ENGINE ---
+    # Placing it at the bottom makes it cleanly accessible after verifying the order data
+    st.write("If you just updated numbers on your Google Sheet, click below to force an immediate sync:")
+    if st.button("🔄 Refresh Data From Google Sheets", type="primary"):
+        st.cache_data.clear() # Wipes out the app's internal snapshot memory
+        st.rerun()            # Forces the entire script to execute fresh from the cloud URL
