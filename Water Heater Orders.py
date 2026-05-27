@@ -95,7 +95,7 @@ if uploaded_file is not None:
 
     with tab1:
         st.subheader("Weekly Bulk Order Sheet")
-        st.write("The `ORDER QTY` column contains the recommended amount. Use the **+/- buttons** or click the cell to manually adjust.")
+        st.write("**Click on any number in the `ORDER QTY` column** to reveal the +/- buttons and manually adjust your order.")
 
         order_sheet_data = []
         
@@ -116,7 +116,11 @@ if uploaded_file is not None:
             # Recommended Order Amount
             order_amt = max(0, target_inv - effective_inv)
             
+            # Define Status
+            status = "🟢 ORDER" if order_amt > 0 else "✔️ OK"
+            
             order_sheet_data.append({
+                "STATUS": status,
                 "MODEL": model,
                 "WAREHOUSE STOCK": current_inv,
                 "PENDING INSTALLS": reserved,
@@ -130,14 +134,14 @@ if uploaded_file is not None:
 
         order_df = pd.DataFrame(order_sheet_data)
 
-        # Style Function to highlight cells > 0
-        def highlight_positive_orders(val):
-            if isinstance(val, (int, float)) and val > 0:
-                return 'background-color: #d4edda; font-weight: bold; color: #155724;' # Light green background
+        # Style Function to highlight the STATUS column instead of the editable column
+        def highlight_status(val):
+            if val == "🟢 ORDER":
+                return 'background-color: #d4edda; font-weight: bold; color: #155724;' 
             return ''
 
-        # Apply style only to the 'ORDER QTY' column
-        styled_order_df = order_df.style.map(highlight_positive_orders, subset=["ORDER QTY"])
+        # Apply style to STATUS
+        styled_order_df = order_df.style.map(highlight_status, subset=["STATUS"])
 
         # Create the Interactive Data Editor
         edited_df = st.data_editor(
@@ -149,7 +153,7 @@ if uploaded_file is not None:
                 "NXLVL STORE PRICE": st.column_config.NumberColumn(format="$%.2f"),
                 "SAVINGS (PER UNIT)": st.column_config.NumberColumn(format="$%.2f"),
             },
-            disabled=["MODEL", "WAREHOUSE STOCK", "PENDING INSTALLS", "SOLD PAST 7 DAYS", "SOLD LAST 30 DAYS", "BULK PRICE ONLINE", "NXLVL STORE PRICE", "SAVINGS (PER UNIT)"],
+            disabled=["STATUS", "MODEL", "WAREHOUSE STOCK", "PENDING INSTALLS", "SOLD PAST 7 DAYS", "SOLD LAST 30 DAYS", "BULK PRICE ONLINE", "NXLVL STORE PRICE", "SAVINGS (PER UNIT)"],
             hide_index=True,
             use_container_width=True
         )
@@ -179,7 +183,6 @@ if uploaded_file is not None:
         col2.metric("Bulk Order Cost (+Tax)", f"${total_bulk_cost_with_tax:,.2f}")
         col3.metric("Store Price Cost (+Tax)", f"${total_store_cost_with_tax:,.2f}")
         
-        # Highlight savings in green if > 0
         if total_savings > 0:
             col4.metric("Money Saved vs Store", f"${total_savings:,.2f}")
         else:
