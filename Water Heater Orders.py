@@ -314,7 +314,7 @@ Thank you
 # --- 🧪 TEST TAB FEATURE SANDBOX PANEL ---
 with tab3:
     st.header("🧪 Advanced Logistics Feature Sandbox")
-    st.write("Interact with prototypes of the four features using your live data below.")
+    st.write("Interact with prototypes of advanced logistical calculators using your live data metrics.")
     
     # Global Blackout Date Rule Engine (No Sundays, No Thanksgiving, No Christmas Day)
     def is_operational_day(check_date):
@@ -506,23 +506,21 @@ with tab3:
     st.write("---")
 
     # ----------------------------------------------------
-    # 🔄 REWORKED SANDBOX FEATURE 6: WEEKDAY RUSH PLANNER
+    # SANDBOX FEATURE 6: WEEKDAY RUSH PLANNER
     # ----------------------------------------------------
     st.subheader("6. Weekday Rush Planner (48-Hour Order Scheduling)")
     st.write("Maps your real installation volume from Monday to Saturday to identify volume spikes and schedule orders around your 48-hour delivery timeline.")
     
     if not df_installed.empty and 'Install Date' in df_installed.columns:
         df_installed['Weekday_Name'] = df_installed['Install Date'].dt.day_name()
-        df_installed['Weekday_Index'] = df_installed['Install Date'].dt.weekday  # Monday=0, Sunday=6
+        df_installed['Weekday_Index'] = df_installed['Install Date'].dt.weekday  
         
-        # Group sales distribution records while eliminating Sundays from scope
         weekly_distribution = df_installed.groupby(['Weekday_Name', 'Weekday_Index'])['Quantity'].sum().reset_index()
         weekly_distribution = weekly_distribution[weekly_distribution['Weekday_Index'] != 6]
         
         total_volume = weekly_distribution['Quantity'].sum() if weekly_distribution['Quantity'].sum() > 0 else 1
         weekly_distribution['% of Weekly Total'] = (weekly_distribution['Quantity'] / total_volume) * 100
         
-        # Sort Chronologically (Monday -> Saturday) to clearly view week flow
         weekly_distribution = weekly_distribution.sort_values(by="Weekday_Index", ascending=True)
         max_volume = weekly_distribution['Quantity'].max()
         
@@ -531,17 +529,15 @@ with tab3:
         
         for _, r in weekly_distribution.iterrows():
             rush_day_idx = r['Weekday_Index']
-            # Compute procurement deadline precisely 2 days prior (48 hours)
             order_day_idx = (rush_day_idx - 2) % 7
             
             order_day_string = day_indexer.get(order_day_idx, "Monday")
-            if order_day_idx == 6:  # Deadline hits a Sunday
+            if order_day_idx == 6:  
                 order_day_string = "🚨 Saturday Morning (Shifted due to Sunday off)"
                 
             is_spike = r['Quantity'] == max_volume and max_volume > 0
             status_string = "🔥 PRIMARY INSTALL SPIKE" if is_spike else "Standard Flow"
             
-            # Formulate scaled horizontal graph block arrays using standard text indicators
             bar_scale = max(1, int(r['% of Weekly Total'] / 4)) if r['% of Weekly Total'] > 0 else 0
             visual_bar = "🟩" * bar_scale if not is_spike else "🔥" * bar_scale
             
@@ -567,3 +563,69 @@ with tab3:
         )
     else:
         st.info("Insufficient historical text records located in sheet repository to construct operational tracking metrics.")
+    st.write("---")
+
+    # ----------------------------------------------------
+    # 🆕 NEW SANDBOX FEATURE 7: JOB DEMAND PREDICTABILITY SCORE
+    # ----------------------------------------------------
+    st.subheader("7. Job Demand Predictability Score (Smooth vs. Wild)")
+    st.write("Analyzes historical timing intervals between installations. High variance flags chaotic demand spikes; low variance signals predictable stability.")
+
+    if not df_installed.empty:
+        # Sort data chronologically to calculate true days passed between jobs
+        df_sorted = df_installed.sort_values(['Model Number', 'Install Date']).copy()
+        df_sorted['Prev_Install_Date'] = df_sorted.groupby('Model Number')['Install Date'].shift(1)
+        df_sorted['Days_Between'] = (df_sorted['Install Date'] - df_sorted['Prev_Install_Date']).dt.days
+
+        # Aggregate interval spacing metrics per model structure
+        gap_stats = df_sorted.groupby('Model Number')['Days_Between'].agg(['mean', 'std']).reset_index()
+        
+        predictability_rows = []
+        for index, row in gap_stats.iterrows():
+            model = row['Model Number']
+            avg_gap = row['mean']
+            std_gap = row['std']
+            
+            # Match current inventory count
+            current_inv = inventory_lookup.get(model, 0)
+            
+            if pd.isna(avg_gap) or avg_gap == 0:
+                score_label = "⚪ Insufficient Data"
+                explanation = "Requires multiple unique historical job dates to evaluate patterns."
+            else:
+                # Coefficient of Variation rules determine workflow categorization
+                cv = std_gap / avg_gap if std_gap > 0 else 0
+                
+                if cv > 1.2:
+                    score_label = "🌶️ WILD / CHAOTIC"
+                    explanation = "Sits dead for weeks, then sells in massive unpredictable clusters. Keep extra buffer."
+                elif cv > 0.6:
+                    score_label = "⚡ MODERATE FLOW"
+                    explanation = "Standard job profile. Normal moving fluctuations."
+                else:
+                    score_label = "🟢 SMOOTH / CONSISTENT"
+                    explanation = "Moves like clockwork at a steady, fixed cadence. Safe to put on auto-pilot."
+            
+            predictability_rows.append({
+                "MODEL NUMBER": model,
+                "CURRENT PHYSICAL STOCK": int(current_inv),
+                "AVG DAYS BETWEEN INSTALLS": "N/A" if pd.isna(avg_gap) or avg_gap == 0 else f"{avg_gap:.1f} Days",
+                "DEMAND PROFILE GRADE": score_label,
+                "OPERATIONAL GUIDANCE": explanation
+            })
+            
+        predictability_df = pd.DataFrame(predictability_rows)
+        
+        def style_predictability(val):
+            if "WILD" in str(val): return 'background-color: #fce8e6; color: #a83232; font-weight: bold;'
+            if "SMOOTH" in str(val): return 'background-color: #d4edda; color: #155724; font-weight: bold;'
+            if "MODERATE" in str(val): return 'background-color: #e2f0fd; color: #1a53a1;'
+            return ''
+            
+        st.dataframe(
+            predictability_df.style.map(style_predictability, subset=["DEMAND PROFILE GRADE"]), 
+            hide_index=True, 
+            use_container_width=True
+        )
+    else:
+        st.info("Insufficient job history to process interval scoring models.")
