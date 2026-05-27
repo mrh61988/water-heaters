@@ -196,13 +196,13 @@ with tab1:
     order_df = pd.DataFrame(order_sheet_data)
     order_df = order_df.sort_values(by="SOLD IN LAST 30 DAYS", ascending=False)
 
-    # Moving ORDER QTY to column 5 (Index Position 4)
+    # Reordering matrix columns (ORDER QTY sits as Column 5)
     reordered_columns = [
         "STATUS",
         "MODEL",
         "WAREHOUSE STOCK",
         "PENDING INSTALLS",
-        "ORDER QTY",  # Column #5
+        "ORDER QTY",  
         "INSTALLED/SOLD IN PAST 7 DAYS",
         "SOLD IN LAST 30 DAYS",
         "BULK PRICE ONLINE",
@@ -231,7 +231,7 @@ with tab1:
         use_container_width=True
     )
 
-    # --- 🔄 MOVED: FINANCIAL SUMMARY NOW SITS DIRECTLY UNDER MASTER TABLE ---
+    # --- 4. EXPANDED FINANCIAL TOTALS WITH ITEMIZED 8% TAX ---
     total_units = edited_df["ORDER QTY"].sum()
     
     base_bulk_cost = (edited_df["ORDER QTY"] * edited_df["BULK PRICE ONLINE"]).sum()
@@ -267,11 +267,11 @@ with tab1:
 
     st.divider()
 
-    # --- 📋 QUICK COPY & PASTE SECTION WITH ONE-CLICK BUTTON ---
+    # --- 📋 QUICK COPY SECTION WITH INJECTED FINANCIAL TEXT BLOCK ---
     st.subheader("📋 Quick Copy Order Sheet (Only Ordered Items)")
-    st.write("Below is your clean procurement list. Click the **Copy icon** at the top right of the code box to grab the data seamlessly for Excel.")
+    st.write("Click the **Copy icon** in the upper right corner of the block below to grab the item data and the financial summary simultaneously.")
     
-    # Filter live from the master table state
+    # Filter live values matching items to order
     quick_copy_base = edited_df[edited_df["ORDER QTY"] > 0].copy()
     
     quick_copy_columns = ["STATUS", "MODEL", "ORDER QTY", "BULK PRICE ONLINE", "NXLVL STORE PRICE"]
@@ -280,27 +280,26 @@ with tab1:
         "NXLVL STORE PRICE": "STORE PRICE"
     })
     
-    # Visual Dataframe Presentation
-    st.dataframe(
-        quick_copy_df.style.map(highlight_status, subset=["STATUS"]),
-        column_config={
-            "BULK PRICE": st.column_config.NumberColumn(format="$%.2f"),
-            "STORE PRICE": st.column_config.NumberColumn(format="$%.2f")
-        },
-        hide_index=True,
-        use_container_width=True
-    )
-    
-    # 🖨️ The Clipboard Copy Engine Box (Tab-delimited string format)
     if not quick_copy_df.empty:
-        # Convert df columns to clean strings for standard copy block aesthetics
         copy_formatted_df = quick_copy_df.copy()
         copy_formatted_df["BULK PRICE"] = copy_formatted_df["BULK PRICE"].map(lambda x: f"${x:,.2f}")
         copy_formatted_df["STORE PRICE"] = copy_formatted_df["STORE PRICE"].map(lambda x: f"${x:,.2f}")
         
+        # Core tabular text layer
         tab_separated_text = copy_formatted_df.to_csv(index=False, sep='\t')
         
-        st.caption("📋 Click the icon in the upper right corner of the box below to copy:")
-        st.code(tab_separated_text, language="text")
+        # 💰 Dynamic Financial Text Appended underneath the table payload
+        financials_copy_block = (
+            f"\n"
+            f"🏪 Bulk Ordering Price\n"
+            f"Subtotal: ${base_bulk_cost:,.2f}\n"
+            f"Estimated Tax (8.0%): ${bulk_tax:,.2f}\n"
+            f"TOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}\n"
+            f"Total Quantity Ordered: {int(total_units)} unit(s)"
+        )
+        
+        full_clipboard_payload = tab_separated_text + financials_copy_block
+        
+        st.code(full_clipboard_payload, language="text")
     else:
         st.info("No items currently marked for order matching the current configuration.")
