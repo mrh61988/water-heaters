@@ -19,7 +19,7 @@ if uploaded_file is not None:
     df = df[df['Model Number'] != 'nan']
     df['Install Date'] = pd.to_datetime(df['Scheduled/ Completed Install Date'], errors='coerce')
     
-    # Price Extraction (Bulk and Store)
+    # Price Extraction
     def clean_price_col(col_name):
         if col_name in df.columns:
             return pd.to_numeric(df[col_name].astype(str).str.replace('$', '', regex=False).str.replace(',', '', regex=False).str.strip(), errors='coerce').fillna(0)
@@ -28,7 +28,6 @@ if uploaded_file is not None:
     df['Bulk Price'] = clean_price_col('BULK PRICE ONLINE (with tax)')
     df['Store Price'] = clean_price_col('NXLVL STORE PRICE')
     
-    # Lookup dictionaries for prices
     bulk_lookup = df[df['Bulk Price'] > 0].drop_duplicates('Model Number', keep='first').set_index('Model Number')['Bulk Price'].to_dict()
     store_lookup = df[df['Store Price'] > 0].drop_duplicates('Model Number', keep='first').set_index('Model Number')['Store Price'].to_dict()
 
@@ -75,7 +74,6 @@ if uploaded_file is not None:
     master_df = all_time[['Model Number', 'Quantity', 'All Time Weekly Avg']]
     master_df = pd.merge(master_df, usage_30d, on='Model Number', how='left').rename(columns={'Quantity_y': 'Sold 30D'}).fillna(0)
     master_df = pd.merge(master_df, usage_7d, on='Model Number', how='left').rename(columns={'Quantity': 'Sold 7D'}).fillna(0)
-    
     master_df = master_df.sort_values(by='Quantity_x', ascending=False).head(8).reset_index(drop=True)
 
     # Weights & Capacity Target
@@ -93,12 +91,11 @@ if uploaded_file is not None:
 
     with tab2:
         st.subheader("Data & Forecast Breakdown")
-        st.write("This tab shows the math behind the recommended order quantities.")
         st.dataframe(master_df[['Model Number', 'Weighted Weekly Avg', 'Target Capacity', 'Reserved']])
 
     with tab1:
         st.subheader("Weekly Bulk Order Sheet")
-        st.write("The `ORDER QTY` column contains the recommended amount, but you can click on it to manually adjust the numbers.")
+        st.write("The `ORDER QTY` column contains the recommended amount. Use the **+/- buttons** or click the cell to manually adjust.")
 
         order_sheet_data = []
         
@@ -133,10 +130,20 @@ if uploaded_file is not None:
 
         order_df = pd.DataFrame(order_sheet_data)
 
+        # Style Function to highlight cells > 0
+        def highlight_positive_orders(val):
+            if isinstance(val, (int, float)) and val > 0:
+                return 'background-color: #d4edda; font-weight: bold; color: #155724;' # Light green background
+            return ''
+
+        # Apply style only to the 'ORDER QTY' column
+        styled_order_df = order_df.style.map(highlight_positive_orders, subset=["ORDER QTY"])
+
         # Create the Interactive Data Editor
         edited_df = st.data_editor(
-            order_df,
+            styled_order_df,
             column_config={
+                # Step=1 adds the plus/minus buttons!
                 "ORDER QTY": st.column_config.NumberColumn("ORDER QTY ✏️", min_value=0, step=1),
                 "BULK PRICE ONLINE": st.column_config.NumberColumn(format="$%.2f"),
                 "NXLVL STORE PRICE": st.column_config.NumberColumn(format="$%.2f"),
@@ -149,12 +156,31 @@ if uploaded_file is not None:
 
         st.divider()
 
-        # Dynamic Totals based on what the user types in the editor!
-        total_units = edited_df["ORDER QTY"].sum()
-        total_order_cost = (edited_df["ORDER QTY"] * edited_df["BULK PRICE ONLINE"]).sum()
-        total_savings = (edited_df["ORDER QTY"] * edited_df["SAVINGS (PER UNIT)"]).sum()
+        # --- 4. FINANCIAL TOTALS (WITH TAX) ---
+        TAX_RATE = 0.08  # 8% Tax
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Total Heaters to Order", int(total_units))
-        col2.metric("Total Cost (Bulk Price)", f"${total_order_cost:,.2f}")
-        col3.metric("Money Saved vs Store Price", f"${total_savings:,.2f}")
+        total_units = edited_df["ORDER QTY"].sum()
+        
+        # Calculate Base Totals
+        base_bulk_cost = (edited_df["ORDER QTY"] * edited_df["BULK PRICE ONLINE"]).sum()
+        base_store_cost = (edited_df["ORDER QTY"] * edited_df["NXLVL STORE PRICE"]).sum()
+        
+        # Apply 8% Tax
+        total_bulk_cost_with_tax = base_bulk_cost * (1 + TAX_RATE)
+        total_store_cost_with_tax = base_store_cost * (1 + TAX_RATE)
+        
+        # Total Realized Savings
+        total_savings = total_store_cost_with_tax - total_bulk_cost_with_tax
+
+        st.subheader("Order Financial Summary (Includes 8% Tax)")
+        
+        col1, col2, col3, col4 = st.columns(4)
+        col1.metric("Total Heaters", int(total_units))
+        col2.metric("Bulk Order Cost (+Tax)", f"${total_bulk_cost_with_tax:,.2f}")
+        col3.metric("Store Price Cost (+Tax)", f"${total_store_cost_with_tax:,.2f}")
+        
+        # Highlight savings in green if > 0
+        if total_savings > 0:
+            col4.metric("Money Saved vs Store", f"${total_savings:,.2f}")
+        else:
+            col4.metric("Money Saved vs Store", "$0.00")
