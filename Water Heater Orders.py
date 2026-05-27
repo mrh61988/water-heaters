@@ -314,7 +314,7 @@ Thank you
 # --- 🧪 TEST TAB FEATURE SANDBOX PANEL ---
 with tab3:
     st.header("🧪 Advanced Logistics Feature Sandbox")
-    st.write("Interact with prototypes of advanced logistical calculators using your live data metrics.")
+    st.write("Interact with prototypes of the four features using your live data below.")
     
     # Global Blackout Date Rule Engine (No Sundays, No Thanksgiving, No Christmas Day)
     def is_operational_day(check_date):
@@ -382,7 +382,7 @@ with tab3:
         if "🟢" in str(val): return 'background-color: #d4edda; color: #155724;'
         return ''
         
-    st.dataframe(runout_df.style.map(style_runout, subset=["STATUS RUNOUT ALERT"]).format({"DAILY VELOCITY": "{:.2f}"}), hide_index=True, use_container_width=True)
+    st.dataframe(runout_df.style.map(style_runout, subset=["STATUS RUNOUT ALERT"]), hide_index=True, use_container_width=True)
     st.write("---")
 
     # ----------------------------------------------------
@@ -463,7 +463,7 @@ with tab3:
     st.write("---")
 
     # ----------------------------------------------------
-    # NEW SANDBOX FEATURE 5: CALENDAR DEADLINES
+    # SANDBOX FEATURE 5: CALENDAR DEADLINES
     # ----------------------------------------------------
     st.subheader("5. Exact Calendar Stockout Deadlines")
     st.write("Projects exact calendar dates when inventory drops to zero, skipping Sundays and major field holidays.")
@@ -506,46 +506,64 @@ with tab3:
     st.write("---")
 
     # ----------------------------------------------------
-    # NEW SANDBOX FEATURE 6: WEEKDAY RUSH PLANNER
+    # 🔄 REWORKED SANDBOX FEATURE 6: WEEKDAY RUSH PLANNER
     # ----------------------------------------------------
     st.subheader("6. Weekday Rush Planner (48-Hour Order Scheduling)")
-    st.write("Analyzes historical construction tracking metrics to identify installation surges and coordinate procurement triggers.")
+    st.write("Maps your real installation volume from Monday to Saturday to identify volume spikes and schedule orders around your 48-hour delivery timeline.")
     
     if not df_installed.empty and 'Install Date' in df_installed.columns:
         df_installed['Weekday_Name'] = df_installed['Install Date'].dt.day_name()
         df_installed['Weekday_Index'] = df_installed['Install Date'].dt.weekday  # Monday=0, Sunday=6
         
+        # Group sales distribution records while eliminating Sundays from scope
         weekly_distribution = df_installed.groupby(['Weekday_Name', 'Weekday_Index'])['Quantity'].sum().reset_index()
-        weekly_distribution = weekly_distribution.sort_values(by="Quantity", ascending=False)
+        weekly_distribution = weekly_distribution[weekly_distribution['Weekday_Index'] != 6]
         
-        day_indexer = {0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday", 4: "Friday", 5: "Saturday", 6: "Sunday"}
+        total_volume = weekly_distribution['Quantity'].sum() if weekly_distribution['Quantity'].sum() > 0 else 1
+        weekly_distribution['% of Weekly Total'] = (weekly_distribution['Quantity'] / total_volume) * 100
+        
+        # Sort Chronologically (Monday -> Saturday) to clearly view week flow
+        weekly_distribution = weekly_distribution.sort_values(by="Weekday_Index", ascending=True)
+        max_volume = weekly_distribution['Quantity'].max()
+        
+        day_indexer = {0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday", 4: "Friday", 5: "Saturday"}
         rush_planner_rows = []
         
         for _, r in weekly_distribution.iterrows():
-            if r['Weekday_Index'] == 6:  # Sunday
-                continue
-                
             rush_day_idx = r['Weekday_Index']
-            # Subtract exactly 48 hours (2 days)
+            # Compute procurement deadline precisely 2 days prior (48 hours)
             order_day_idx = (rush_day_idx - 2) % 7
             
-            order_day_string = day_indexer[order_day_idx]
-            if order_day_idx == 6:  # Falls on Sunday
-                order_day_string = "Saturday Morning (Shifted due to Sunday off)"
+            order_day_string = day_indexer.get(order_day_idx, "Monday")
+            if order_day_idx == 6:  # Deadline hits a Sunday
+                order_day_string = "🚨 Saturday Morning (Shifted due to Sunday off)"
                 
+            is_spike = r['Quantity'] == max_volume and max_volume > 0
+            status_string = "🔥 PRIMARY INSTALL SPIKE" if is_spike else "Standard Flow"
+            
+            # Formulate scaled horizontal graph block arrays using standard text indicators
+            bar_scale = max(1, int(r['% of Weekly Total'] / 4)) if r['% of Weekly Total'] > 0 else 0
+            visual_bar = "🟩" * bar_scale if not is_spike else "🔥" * bar_scale
+            
             rush_planner_rows.append({
-                "INSTALLATION DAY": r['Weekday_Name'],
-                "HISTORICAL VOLUME RECORDED": int(r['Quantity']),
-                "48-HOUR PROCUREMENT DEADLINE": order_day_string,
-                "STRATEGIC PRIORITY STATUS": "🔥 High-Volume Spike Day" if len(rush_planner_rows) < 2 else "Standard Flow Window"
+                "DAY OF WEEK": r['Weekday_Name'],
+                "TOTAL INSTALLS": int(r['Quantity']),
+                "% OF WEEKLY DISTRIBUTION": r['% of Weekly Total'],
+                "VOLUME VISUALIZER": visual_bar,
+                "48-HOUR ORDER DEADLINE": order_day_string,
+                "WEEKDAY PROFILE": status_string
             })
             
         rush_planner_df = pd.DataFrame(rush_planner_rows)
         
         def style_rush(val):
-            if "🔥" in str(val): return 'background-color: #fef3cd; color: #856404; font-weight: bold;'
+            if "🔥" in str(val): return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
             return ''
             
-        st.dataframe(rush_planner_df.style.map(style_rush, subset=["STRATEGIC PRIORITY STATUS"]), hide_index=True, use_container_width=True)
+        st.dataframe(
+            rush_planner_df.style.map(style_rush, subset=["WEEKDAY PROFILE"]).format({"% OF WEEKLY DISTRIBUTION": "{:.1f}%"}), 
+            hide_index=True, 
+            use_container_width=True
+        )
     else:
         st.info("Insufficient historical text records located in sheet repository to construct operational tracking metrics.")
