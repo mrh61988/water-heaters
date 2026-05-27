@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import datetime
 
 st.set_page_config(layout="wide")
 st.title("Water Heater Auto-Ordering Dashboard")
@@ -154,7 +155,7 @@ else:
 
 
 # --- 3. UI TAB PANELS ---
-tab1, tab2 = st.tabs(["📋 Interactive Order Sheet", "📊 Forecasting Breakdown"])
+tab1, tab2, tab3 = st.tabs(["📋 Interactive Order Sheet", "📊 Forecasting Breakdown", "🧪 Feature Sandbox"])
 
 with tab2:
     st.subheader("Data & Forecast Breakdown")
@@ -280,10 +281,8 @@ with tab1:
         for _, r in quick_copy_base.iterrows():
             table_markdown_rows += f"| {r['MODEL']} | {int(r['ORDER QTY'])} | ${r['BULK PRICE ONLINE']:,.2f} | ${r['NXLVL STORE PRICE']:,.2f} |\n"
 
-        # --- 🔄 ADJUSTED LOGIC: Added explicit triple newline line space between greeting paragraphs ---
         email_rich_template = f"""
 Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!
-
 
 Please send payment request to my cell. 804-536-4748
 
@@ -310,3 +309,134 @@ Thank you
         )
     else:
         st.info("No items currently marked for order matching the current configuration.")
+
+
+# --- 🧪 NEW TEST TAB FEATURE SANDBOX PANEL ---
+with tab3:
+    st.header("🧪 Advanced Logistics Feature Sandbox")
+    st.write("Use the test sections below to interact with prototypes of the four features using your live data.")
+    
+    # ----------------------------------------------------
+    # SANDBOX FEATURE 1: PREDICTIVE RUNOUT ENGINE
+    # ----------------------------------------------------
+    st.subheader("1. Predictive Runout Engine (Days of Stock Left)")
+    st.write("Calculates exact runout thresholds using your current warehouse capacity minus pending jobs, divided by moving consumption velocity.")
+    
+    velocity_slider = st.slider("Simulated Sales Velocity Multiplier", min_value=0.5, max_value=3.0, value=1.0, step=0.1, help="Simulates spikes or dips in active installation trends.")
+    
+    runout_data = []
+    for index, row in master_df.iterrows():
+        model = row['Model Number']
+        shop_stock = int(row['In Shop'])
+        reserved = int(row['Reserved'])
+        
+        # Calculate moving daily sales velocity from the master weighting metrics
+        daily_velocity = (row['Weighted Weekly Avg'] / 7.0) * velocity_slider
+        net_stock = shop_stock - reserved
+        
+        if daily_velocity <= 0:
+            days_left = 999  # Safe fallback if no recorded sales exist
+        else:
+            days_left = max(0, int(net_stock / daily_velocity))
+            
+        if days_left <= 3:
+            alert = "🔴 CRITICAL STOCK"
+        elif days_left <= 8:
+            alert = "Warning"
+        else:
+            alert = "🟢 HEALTHY"
+            
+        runout_data.append({
+            "MODEL": model,
+            "AVAILABLE STOCK": net_stock,
+            "DAILY VELOCITY": round(daily_velocity, 2),
+            "EST. DAYS LEFT": "STOCKED OUT" if net_stock <= 0 else (f"{days_left} Days" if days_left < 365 else "Stable Stock"),
+            "STATUS RUNOUT ALERT": alert
+        })
+    
+    runout_df = pd.DataFrame(runout_data)
+    
+    def style_runout(val):
+        if "🔴" in str(val): return 'background-color: #f8d7da; color: #721c24; font-weight: bold;'
+        if "Warning" in str(val): return 'background-color: #fff3cd; color: #856404;'
+        if "🟢" in str(val): return 'background-color: #d4edda; color: #155724;'
+        return ''
+        
+    st.dataframe(runout_df.style.applymap(style_runout, subset=["STATUS RUNOUT ALERT"]), hide_index=True, use_container_width=True)
+    st.write("---")
+
+    # ----------------------------------------------------
+    # SANDBOX FEATURE 2: VISUAL ANALYTICS AND CHARTS
+    # ----------------------------------------------------
+    st.subheader("2. Graphical Sales Volume Breakdown")
+    st.write("A visual distribution of installation activity by unit model type over the past 30 days.")
+    
+    chart_df = master_df[['Model Number', 'Sold 30D']].copy().set_index('Model Number')
+    st.bar_chart(chart_df, use_container_width=True)
+    st.write("---")
+
+    # ----------------------------------------------------
+    # SANDBOX FEATURE 3: DEAD STOCK DETECTOR
+    # ----------------------------------------------------
+    st.subheader("3. Dead Stock & Slow-Mover Filter")
+    st.write("Flags models that have items sitting on warehouse shelves but show absolute zero installation activity during selected time horizons.")
+    
+    dead_stock_days = st.selectbox("Inactivity Window Horizon", [7, 30], index=1)
+    target_col = "Sold 7D" if dead_stock_days == 7 else "Sold 30D"
+    
+    dead_stock_list = []
+    for model, stock in inventory_lookup.items():
+        # Match back velocity tracking counters
+        matched_sales = master_df[master_df['Model Number'] == model][target_col].sum()
+        if stock > 0 and matched_sales == 0:
+            dead_stock_list.append({
+                "SLOW-MOVING MODEL": model,
+                "WAREHOUSE UNITS SITTING": int(stock),
+                "TOTAL SALES IN HORIZON": 0,
+                "RECOMMENDED ACTION": "Clear Shelf Space / Transfer Capital"
+            })
+            
+    if dead_stock_list:
+        st.dataframe(pd.DataFrame(dead_stock_list), hide_index=True, use_container_width=True)
+    else:
+        st.success("Great job! No dead stock or unmoving inventory models located matching these parameters.")
+    st.write("---")
+
+    # ----------------------------------------------------
+    # SANDBOX FEATURE 4: SAFETY STOCK & REORDER POINTS (ROP)
+    # ----------------------------------------------------
+    st.subheader("4. Safety Stock & Reorder Points (ROP) Engine")
+    st.write("Standard logistics calculator using the standard formula:")
+    st.latex(r"ROP = (\text{Daily Velocity} \times \text{Lead Time Days}) + \text{Safety Stock Cushion}")
+    
+    col_lead, col_cushion = st.columns(2)
+    with col_lead:
+        param_lead_time = st.number_input("Supplier Delivery Lead Time (Days)", min_value=1, max_value=14, value=3)
+    with col_cushion:
+        param_safety_cushion = st.number_input("Mandatory Safety Stock Cushion (Days of Sales)", min_value=1, max_value=14, value=4)
+        
+    rop_data = []
+    for index, row in master_df.iterrows():
+        model = row['Model Number']
+        daily_vel = row['Weighted Weekly Avg'] / 7.0
+        current_inv = inventory_lookup.get(model, 0)
+        
+        # Calculate structural reorder trigger requirements
+        reorder_point = (daily_vel * param_lead_time) + (daily_vel * param_safety_cushion)
+        triggered = "⚠️ ORDER NOW" if current_inv <= reorder_point else "Stock Stable"
+        
+        rop_data.append({
+            "MODEL ID": model,
+            "DAILY SALES VELOCITY": round(daily_vel, 2),
+            "CALCULATED REORDER POINT (ROP)": round(reorder_point, 1),
+            "CURRENT SHOP STOCK": int(current_inv),
+            "LOGISTICS TRIGGER ACTION": triggered
+        })
+        
+    rop_df = pd.DataFrame(rop_data)
+    
+    def style_rop(val):
+        if "⚠️" in str(val): return 'background-color: #fce8e6; color: #a83232; font-weight: bold;'
+        return 'color: #2b7a4b;'
+        
+    st.dataframe(rop_df.style.applymap(style_rop, subset=["LOGISTICS TRIGGER ACTION"]), hide_index=True, use_container_width=True)
