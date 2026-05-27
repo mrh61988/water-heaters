@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import datetime
 
 st.set_page_config(layout="wide")
 st.title("Water Heater Auto-Ordering Dashboard")
@@ -196,7 +197,6 @@ with tab1:
     order_df = pd.DataFrame(order_sheet_data)
     order_df = order_df.sort_values(by="SOLD IN LAST 30 DAYS", ascending=False)
 
-    # Column ordering control index matrix (ORDER QTY sits as Column 5)
     reordered_columns = [
         "STATUS",
         "MODEL",
@@ -211,8 +211,6 @@ with tab1:
     ]
     order_df = order_df[reordered_columns]
 
-    # --- 🔄 NEW HIGHLIGHT LOGIC ---
-    # Safely highlights the MODEL column whenever ORDER QTY is greater than zero
     def highlight_ordered_models(df_input):
         style_df = pd.DataFrame('', index=df_input.index, columns=df_input.columns)
         mask = df_input['ORDER QTY'] > 0
@@ -272,7 +270,7 @@ with tab1:
 
     # --- 📋 RICH TEXT EMAIL DRAFT GENERATION ENGINE ---
     st.subheader("✉️ Copy & Paste Rich Text Email Draft")
-    st.write("💡 Use your mouse cursor to highlight the text block and table below together, copy, and paste straight into your Gmail or Outlook composer window.")
+    st.write("💡 **How to copy:** Use your mouse cursor to highlight the text block and clean table below together, copy, and paste straight into your email composer window.")
     
     quick_copy_base = edited_df[edited_df["ORDER QTY"] > 0].copy()
     
@@ -301,7 +299,7 @@ Thank you
         """
         
         st.markdown(
-            f'<div style="background-color: #fcfcfc; padding: 25px; border-radius: 8px; border: 1px solid #eaeaea;">'
+            f'<div style="background-color: #fcfcfc; padding: 25px; border-radius: 8px; border: 1px solid #eaeaea; line-height: 1.6;">'
             f'{email_rich_template}'
             f'</div>', 
             unsafe_allow_html=True
