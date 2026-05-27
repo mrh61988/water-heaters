@@ -187,7 +187,7 @@ with tab1:
             "PENDING INSTALLS": reserved,
             "ORDER QTY": order_amt, 
             "INSTALLED/SOLD IN PAST 7 DAYS": sold_7d,
-            "SOLD IN LAST 30 DAYS": sold_30d, # Verified precise column matching name
+            "SOLD IN LAST 30 DAYS": sold_30d,
             "BULK PRICE ONLINE": bulk_price,
             "NXLVL STORE PRICE": store_price,
             "SAVINGS": savings
@@ -195,6 +195,25 @@ with tab1:
 
     order_df = pd.DataFrame(order_sheet_data)
 
+    # --- 🔄 NEW SORTING LOGIC (By Sold in Last 30 Days Descending) ---
+    order_df = order_df.sort_values(by="SOLD IN LAST 30 DAYS", ascending=False)
+
+    # --- 🔄 NEW COLUMN REORDERING LOGIC (Moves ORDER QTY to 3rd Column) ---
+    reordered_columns = [
+        "STATUS",
+        "MODEL",
+        "ORDER QTY",  # Pinned right here as Column #3
+        "WAREHOUSE STOCK",
+        "PENDING INSTALLS",
+        "INSTALLED/SOLD IN PAST 7 DAYS",
+        "SOLD IN LAST 30 DAYS",
+        "BULK PRICE ONLINE",
+        "NXLVL STORE PRICE",
+        "SAVINGS"
+    ]
+    order_df = order_df[reordered_columns]
+
+    # Style function for Status column
     def highlight_status(val):
         if val == "🟢 ORDER":
             return 'background-color: #d4edda; font-weight: bold; color: #155724;' 
