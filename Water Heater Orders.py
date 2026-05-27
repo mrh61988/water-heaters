@@ -314,13 +314,13 @@ Thank you
 # --- 🧪 TEST TAB FEATURE SANDBOX PANEL ---
 with tab3:
     st.header("🧪 Advanced Logistics Feature Sandbox")
-    st.write("Use the test sections below to interact with prototypes of the four features using your live data.")
+    st.write("Interact with prototypes of the four features using your live data below.")
     
     # ----------------------------------------------------
-    # SANDBOX FEATURE 1: PREDICTIVE RUNOUT ENGINE
+    # SANDBOX FEATURE 1: RUNOUT TRACKER
     # ----------------------------------------------------
-    st.subheader("1. Predictive Runout Engine (Days of Stock Left)")
-    st.write("Calculates exact runout thresholds using your current warehouse capacity minus pending jobs, divided by moving consumption velocity.")
+    st.subheader("1. Runout Tracker (Days of Stock Left)")
+    st.write("Calculates how many days until you run out using your current stock minus pending jobs, divided by sales velocity.")
     
     velocity_slider = st.slider("Simulated Sales Velocity Multiplier", min_value=0.5, max_value=3.0, value=1.0, step=0.1, help="Simulates spikes or dips in active installation trends.")
     
@@ -330,7 +330,6 @@ with tab3:
         shop_stock = int(row['In Shop'])
         reserved = int(row['Reserved'])
         
-        # Calculate moving daily sales velocity from the master weighting metrics
         daily_velocity = (row['Weighted Weekly Avg'] / 7.0) * velocity_slider
         net_stock = shop_stock - reserved
         
@@ -362,14 +361,13 @@ with tab3:
         if "🟢" in str(val): return 'background-color: #d4edda; color: #155724;'
         return ''
         
-    # 🔄 FIX: Changed .applymap() to .map() to align with modern Pandas syntax
     st.dataframe(runout_df.style.map(style_runout, subset=["STATUS RUNOUT ALERT"]), hide_index=True, use_container_width=True)
     st.write("---")
 
     # ----------------------------------------------------
     # SANDBOX FEATURE 2: VISUAL ANALYTICS AND CHARTS
     # ----------------------------------------------------
-    st.subheader("2. Graphical Sales Volume Breakdown")
+    st.subheader("2. Sales Visualizer (What's Hot)")
     st.write("A visual distribution of installation activity by unit model type over the past 30 days.")
     
     chart_df = master_df[['Model Number', 'Sold 30D']].copy().set_index('Model Number')
@@ -379,7 +377,7 @@ with tab3:
     # ----------------------------------------------------
     # SANDBOX FEATURE 3: DEAD STOCK DETECTOR
     # ----------------------------------------------------
-    st.subheader("3. Dead Stock & Slow-Mover Filter")
+    st.subheader("3. Dead Stock Finder (Dust Collectors)")
     st.write("Flags models that have items sitting on warehouse shelves but show absolute zero installation activity during selected time horizons.")
     
     dead_stock_days = st.selectbox("Inactivity Window Horizon", [7, 30], index=1)
@@ -405,13 +403,13 @@ with tab3:
     # ----------------------------------------------------
     # SANDBOX FEATURE 4: SAFETY STOCK & REORDER POINTS (ROP)
     # ----------------------------------------------------
-    st.subheader("4. Safety Stock & Reorder Points (ROP) Engine")
-    st.write("Standard logistics calculator using the standard formula:")
-    st.latex(r"ROP = (\text{Daily Velocity} \times \text{Lead Time Days}) + \text{Safety Stock Cushion}")
+    st.subheader("4. Smart Reorder Trigger (When to Buy)")
+    st.write("Calculates standard logistics points based on your specific turnaround windows.")
     
     col_lead, col_cushion = st.columns(2)
     with col_lead:
-        param_lead_time = st.number_input("Supplier Delivery Lead Time (Days)", min_value=1, max_value=14, value=3)
+        # 🔄 UPDATED: Set default to 2 days to precisely reflect your 48-hour delivery timeline
+        param_lead_time = st.number_input("Supplier Delivery Lead Time (Days)", min_value=1, max_value=14, value=2)
     with col_cushion:
         param_safety_cushion = st.number_input("Mandatory Safety Stock Cushion (Days of Sales)", min_value=1, max_value=14, value=4)
         
@@ -438,5 +436,4 @@ with tab3:
         if "⚠️" in str(val): return 'background-color: #fce8e6; color: #a83232; font-weight: bold;'
         return 'color: #2b7a4b;'
         
-    # 🔄 FIX: Changed .applymap() to .map() to align with modern Pandas syntax
     st.dataframe(rop_df.style.map(style_rop, subset=["LOGISTICS TRIGGER ACTION"]), hide_index=True, use_container_width=True)
