@@ -276,7 +276,6 @@ with tab1:
     quick_copy_base = edited_df[edited_df["ORDER QTY"] > 0].copy()
     
     if not quick_copy_base.empty:
-        # --- 🔄 ADJUSTED LOGIC: Removed STATUS column from layout ---
         table_markdown_rows = ""
         for _, r in quick_copy_base.iterrows():
             table_markdown_rows += f"| {r['MODEL']} | {int(r['ORDER QTY'])} | ${r['BULK PRICE ONLINE']:,.2f} | ${r['NXLVL STORE PRICE']:,.2f} |\n"
