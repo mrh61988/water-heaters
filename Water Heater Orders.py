@@ -372,7 +372,6 @@ with tab3:
         if "🟢" in str(val): return 'background-color: #d4edda; color: #155724;'
         return ''
         
-    # 🔄 FIX: Enforced standard strict pandas style formatting pattern for exactly 2 decimal points on the generic velocity floats
     st.dataframe(runout_df.style.map(style_runout, subset=["STATUS RUNOUT ALERT"]).format({"DAILY VELOCITY": "{:.2f}"}), hide_index=True, use_container_width=True)
     st.write("---")
 
@@ -438,8 +437,8 @@ with tab3:
         
         rop_data.append({
             "MODEL ID": model,
-            "DAILY SALES VELOCITY": round(daily_vel, 2),
-            "CALCULATED REORDER POINT (ROP)": round(reorder_point, 1),
+            "DAILY SALES VELOCITY": daily_vel,
+            "CALCULATED REORDER POINT (ROP)": reorder_point,
             "CURRENT SHOP STOCK": int(current_inv),
             "LOGISTICS TRIGGER ACTION": triggered
         })
@@ -450,4 +449,5 @@ with tab3:
         if "⚠️" in str(val): return 'background-color: #fce8e6; color: #a83232; font-weight: bold;'
         return 'color: #2b7a4b;'
         
-    st.dataframe(rop_df.style.map(style_rop, subset=["LOGISTICS TRIGGER ACTION"]), hide_index=True, use_container_width=True)
+    # 🔄 FIX: Enforced strict pandas string formatting rules to ensure both numeric calculation metrics match a 2 decimal layout
+    st.dataframe(rop_df.style.map(style_rop, subset=["LOGISTICS TRIGGER ACTION"]).format({"DAILY SALES VELOCITY": "{:.2f}", "CALCULATED REORDER POINT (ROP)": "{:.2f}"}), hide_index=True, use_container_width=True)
