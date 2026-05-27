@@ -271,7 +271,7 @@ with tab1:
 
     # --- 📋 RICH TEXT EMAIL DRAFT GENERATION ENGINE ---
     st.subheader("✉️ Copy & Paste Rich Text Email Draft")
-    st.write("💡 Momently drag over the clean text frame below to copy it effortlessly for your team.")
+    st.write("💡 **How to copy:** Use your mouse cursor to highlight the text block and clean table below together, copy, and paste straight into your email composer window.")
     
     quick_copy_base = edited_df[edited_df["ORDER QTY"] > 0].copy()
     
@@ -280,7 +280,7 @@ with tab1:
         for _, r in quick_copy_base.iterrows():
             table_markdown_rows += f"| {r['MODEL']} | {int(r['ORDER QTY'])} | ${r['BULK PRICE ONLINE']:,.2f} | ${r['NXLVL STORE PRICE']:,.2f} |\n"
 
-        # --- 🔄 ADJUSTED LOGIC: HTML break tags (<br>) force proper separation when copied ---
+        # --- 🔄 ADJUSTED LOGIC: Removed ** bold syntax to maintain 100% uniform font weight, size, and style ---
         email_rich_template = f"""
 Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!
 
@@ -296,7 +296,7 @@ Thank you
 <br><br>
 Subtotal: ${base_bulk_cost:,.2f}<br>
 Estimated Tax (8.0%): ${bulk_tax:,.2f}<br>
-**TOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}**
+TOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}
         """
         
         st.markdown(
