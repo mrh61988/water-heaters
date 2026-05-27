@@ -345,9 +345,11 @@ with tab3:
         else:
             alert = "🟢 HEALTHY"
             
+        # 🔄 UPDATED: Explicitly added raw 'CURRENT PHYSICAL STOCK' into the columns array
         runout_data.append({
             "MODEL": model,
-            "AVAILABLE STOCK": net_stock,
+            "CURRENT PHYSICAL STOCK": shop_stock,
+            "NET AVAILABLE STOCK": net_stock,
             "DAILY VELOCITY": round(daily_velocity, 2),
             "EST. DAYS LEFT": "STOCKED OUT" if net_stock <= 0 else (f"{days_left} Days" if days_left < 365 else "Stable Stock"),
             "STATUS RUNOUT ALERT": alert
@@ -368,10 +370,14 @@ with tab3:
     # SANDBOX FEATURE 2: VISUAL ANALYTICS AND CHARTS
     # ----------------------------------------------------
     st.subheader("2. Sales Visualizer (What's Hot)")
-    st.write("A visual distribution of installation activity by unit model type over the past 30 days.")
+    st.write("An instant text grid showing your sales volume, sorted from highest to lowest volume automatically.")
     
-    chart_df = master_df[['Model Number', 'Sold 30D']].copy().set_index('Model Number')
-    st.bar_chart(chart_df, use_container_width=True)
+    # 🔄 UPDATED: Swapped the graph block out for an elegantly ordered text dataframe view
+    sales_table_df = master_df[['Model Number', 'Sold 30D']].copy()
+    sales_table_df = sales_table_df.sort_values(by='Sold 30D', ascending=False)
+    sales_table_df.columns = ["MODEL NUMBER", "UNITS SOLD (PAST 30 DAYS)"]
+    
+    st.dataframe(sales_table_df, hide_index=True, use_container_width=True)
     st.write("---")
 
     # ----------------------------------------------------
@@ -408,7 +414,7 @@ with tab3:
     
     col_lead, col_cushion = st.columns(2)
     with col_lead:
-        # 🔄 UPDATED: Set default to 2 days to precisely reflect your 48-hour delivery timeline
+        # Pinned default delivery metric to 2 days (reflecting your 48-hour delivery parameter)
         param_lead_time = st.number_input("Supplier Delivery Lead Time (Days)", min_value=1, max_value=14, value=2)
     with col_cushion:
         param_safety_cushion = st.number_input("Mandatory Safety Stock Cushion (Days of Sales)", min_value=1, max_value=14, value=4)
