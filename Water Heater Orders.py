@@ -196,13 +196,13 @@ with tab1:
     order_df = pd.DataFrame(order_sheet_data)
     order_df = order_df.sort_values(by="SOLD IN LAST 30 DAYS", ascending=False)
 
-    # --- 🔄 MOVING ORDER QTY TO COLUMN 5 ---
+    # Moving ORDER QTY to column 5 (Index Position 4)
     reordered_columns = [
         "STATUS",
         "MODEL",
         "WAREHOUSE STOCK",
         "PENDING INSTALLS",
-        "ORDER QTY",  # Exactly Column #5 (Index 4)
+        "ORDER QTY",  # Column #5
         "INSTALLED/SOLD IN PAST 7 DAYS",
         "SOLD IN LAST 30 DAYS",
         "BULK PRICE ONLINE",
@@ -231,33 +231,7 @@ with tab1:
         use_container_width=True
     )
 
-    st.divider()
-
-    # --- 📋 NEW QUICK COPY & PASTE SECTION ---
-    st.subheader("📋 Quick Copy Order Sheet (Only Ordered Items)")
-    st.write("This sheet automatically isolates models with an `ORDER QTY > 0`. Hover over the grid and click the **copy icon** in the top right to instantly paste into Excel or emails.")
-    
-    # Filter live from the edited grid state
-    quick_copy_base = edited_df[edited_df["ORDER QTY"] > 0].copy()
-    
-    # Isolate and format requested columns precisely
-    quick_copy_columns = ["STATUS", "MODEL", "ORDER QTY", "BULK PRICE ONLINE", "NXLVL STORE PRICE"]
-    quick_copy_df = quick_copy_base[quick_copy_columns].rename(columns={
-        "BULK PRICE ONLINE": "BULK PRICE",
-        "NXLVL STORE PRICE": "STORE PRICE"
-    })
-    
-    st.dataframe(
-        quick_copy_df.style.map(highlight_status, subset=["STATUS"]),
-        column_config={
-            "BULK PRICE": st.column_config.NumberColumn(format="$%.2f"),
-            "STORE PRICE": st.column_config.NumberColumn(format="$%.2f")
-        },
-        hide_index=True,
-        use_container_width=True
-    )
-
-    # --- 4. EXPANDED FINANCIAL TOTALS WITH ITEMIZED 8% TAX ---
+    # --- 🔄 MOVED: FINANCIAL SUMMARY NOW SITS DIRECTLY UNDER MASTER TABLE ---
     total_units = edited_df["ORDER QTY"].sum()
     
     base_bulk_cost = (edited_df["ORDER QTY"] * edited_df["BULK PRICE ONLINE"]).sum()
@@ -290,3 +264,43 @@ with tab1:
         st.markdown("### 📈 Order Volume Metrics")
         st.metric("Total Heaters Selected", int(total_units))
         st.metric("Net Financial Savings", f"${max(0.0, net_savings):,.2f}")
+
+    st.divider()
+
+    # --- 📋 QUICK COPY & PASTE SECTION WITH ONE-CLICK BUTTON ---
+    st.subheader("📋 Quick Copy Order Sheet (Only Ordered Items)")
+    st.write("Below is your clean procurement list. Click the **Copy icon** at the top right of the code box to grab the data seamlessly for Excel.")
+    
+    # Filter live from the master table state
+    quick_copy_base = edited_df[edited_df["ORDER QTY"] > 0].copy()
+    
+    quick_copy_columns = ["STATUS", "MODEL", "ORDER QTY", "BULK PRICE ONLINE", "NXLVL STORE PRICE"]
+    quick_copy_df = quick_copy_base[quick_copy_columns].rename(columns={
+        "BULK PRICE ONLINE": "BULK PRICE",
+        "NXLVL STORE PRICE": "STORE PRICE"
+    })
+    
+    # Visual Dataframe Presentation
+    st.dataframe(
+        quick_copy_df.style.map(highlight_status, subset=["STATUS"]),
+        column_config={
+            "BULK PRICE": st.column_config.NumberColumn(format="$%.2f"),
+            "STORE PRICE": st.column_config.NumberColumn(format="$%.2f")
+        },
+        hide_index=True,
+        use_container_width=True
+    )
+    
+    # 🖨️ The Clipboard Copy Engine Box (Tab-delimited string format)
+    if not quick_copy_df.empty:
+        # Convert df columns to clean strings for standard copy block aesthetics
+        copy_formatted_df = quick_copy_df.copy()
+        copy_formatted_df["BULK PRICE"] = copy_formatted_df["BULK PRICE"].map(lambda x: f"${x:,.2f}")
+        copy_formatted_df["STORE PRICE"] = copy_formatted_df["STORE PRICE"].map(lambda x: f"${x:,.2f}")
+        
+        tab_separated_text = copy_formatted_df.to_csv(index=False, sep='\t')
+        
+        st.caption("📋 Click the icon in the upper right corner of the box below to copy:")
+        st.code(tab_separated_text, language="text")
+    else:
+        st.info("No items currently marked for order matching the current configuration.")
