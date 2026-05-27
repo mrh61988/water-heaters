@@ -196,7 +196,7 @@ with tab1:
     order_df = pd.DataFrame(order_sheet_data)
     order_df = order_df.sort_values(by="SOLD IN LAST 30 DAYS", ascending=False)
 
-    # Column ordering control index map
+    # Column ordering control index matrix (ORDER QTY sits as Column 5)
     reordered_columns = [
         "STATUS",
         "MODEL",
@@ -211,12 +211,15 @@ with tab1:
     ]
     order_df = order_df[reordered_columns]
 
-    def highlight_status(val):
-        if val == "🟢 ORDER":
-            return 'background-color: #d4edda; font-weight: bold; color: #155724;' 
-        return ''
+    # --- 🔄 NEW HIGHLIGHT LOGIC ---
+    # Safely highlights the MODEL column whenever ORDER QTY is greater than zero
+    def highlight_ordered_models(df_input):
+        style_df = pd.DataFrame('', index=df_input.index, columns=df_input.columns)
+        mask = df_input['ORDER QTY'] > 0
+        style_df.loc[mask, 'MODEL'] = 'background-color: #d4edda; font-weight: bold; color: #155724;'
+        return style_df
 
-    styled_order_df = order_df.style.map(highlight_status, subset=["STATUS"])
+    styled_order_df = order_df.style.apply(highlight_ordered_models, axis=None)
 
     edited_df = st.data_editor(
         styled_order_df,
@@ -269,17 +272,15 @@ with tab1:
 
     # --- 📋 RICH TEXT EMAIL DRAFT GENERATION ENGINE ---
     st.subheader("✉️ Copy & Paste Rich Text Email Draft")
-    st.info("💡 **How to copy:** Simply use your mouse cursor to highlight the text block and table below together, hit copy, and paste it straight into your Gmail or Outlook composer window.")
+    st.write("💡 Use your mouse cursor to highlight the text block and table below together, copy, and paste straight into your Gmail or Outlook composer window.")
     
     quick_copy_base = edited_df[edited_df["ORDER QTY"] > 0].copy()
     
     if not quick_copy_base.empty:
-        # Build Table rows dynamically in standard markdown syntax
         table_markdown_rows = ""
         for _, r in quick_copy_base.iterrows():
             table_markdown_rows += f"| {r['STATUS']} | {r['MODEL']} | {int(r['ORDER QTY'])} | ${r['BULK PRICE ONLINE']:,.2f} | ${r['NXLVL STORE PRICE']:,.2f} |\n"
 
-        # Construct full rich text email presentation layer
         email_rich_template = f"""
 Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!
 
@@ -299,7 +300,6 @@ Thank you
 * **TOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}**
         """
         
-        # Wrapped container to separate it visually from the dashboard controls
         st.markdown(
             f'<div style="background-color: #fcfcfc; padding: 25px; border-radius: 8px; border: 1px solid #eaeaea;">'
             f'{email_rich_template}'
