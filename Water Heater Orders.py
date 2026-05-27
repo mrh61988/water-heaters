@@ -280,9 +280,10 @@ with tab1:
         for _, r in quick_copy_base.iterrows():
             table_markdown_rows += f"| {r['MODEL']} | {int(r['ORDER QTY'])} | ${r['BULK PRICE ONLINE']:,.2f} | ${r['NXLVL STORE PRICE']:,.2f} |\n"
 
-        # --- 🔄 ADJUSTED LOGIC: Pure Markdown alignment eliminates style divergences ---
+        # --- 🔄 ADJUSTED LOGIC: Added explicit triple newline line space between greeting paragraphs ---
         email_rich_template = f"""
 Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!
+
 
 Please send payment request to my cell. 804-536-4748
 
