@@ -329,6 +329,8 @@ with tab3:
         model = row['Model Number']
         shop_stock = int(row['In Shop'])
         reserved = int(row['Reserved'])
+        sold_7d = int(row['Sold 7D'])
+        sold_30d = int(row['Sold 30D'])
         
         daily_velocity = (row['Weighted Weekly Avg'] / 7.0) * velocity_slider
         net_stock = shop_stock - reserved
@@ -348,12 +350,14 @@ with tab3:
         else:
             alert = "🟢 HEALTHY"
             
-        # 🔄 UPDATED: Inserted PENDING INSTALLS and created a temporary sorting metric key
+        # 🔄 UPDATED: Added historical 'SOLD IN PAST 7 DAYS' and 'SOLD IN PAST 30 DAYS' counters
         runout_data.append({
             "MODEL": model,
             "CURRENT PHYSICAL STOCK": shop_stock,
             "PENDING INSTALLS": reserved,
             "NET AVAILABLE STOCK": net_stock,
+            "SOLD IN PAST 7 DAYS": sold_7d,
+            "SOLD IN PAST 30 DAYS": sold_30d,
             "DAILY VELOCITY": round(daily_velocity, 2),
             "EST. DAYS LEFT": "STOCKED OUT" if net_stock <= 0 else (f"{days_left} Days" if days_left < 365 else "Stable Stock"),
             "STATUS RUNOUT ALERT": alert,
@@ -361,8 +365,6 @@ with tab3:
         })
     
     runout_df = pd.DataFrame(runout_data)
-    
-    # 🔄 UPDATED: Sorted table automatically by days remaining (lowest to highest)
     runout_df = runout_df.sort_values(by="_raw_sort_key", ascending=True).drop(columns=["_raw_sort_key"])
     
     def style_runout(val):
