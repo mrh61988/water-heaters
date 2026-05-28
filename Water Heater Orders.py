@@ -109,6 +109,11 @@ if (weight_7d + weight_30d + weight_all) != 100:
 all_time = df_installed.groupby('Model Number')['Quantity'].sum().reset_index()
 all_time['All Time Weekly Avg'] = all_time['Quantity'] / total_weeks
 
+# 🔄 NEW: Extract Last Install Date for each Model
+last_install_df = df_installed.groupby('Model Number')['Install Date'].max().reset_index()
+last_install_df.rename(columns={'Install Date': 'Last Install Date'}, inplace=True)
+last_install_df['Last Install Date'] = last_install_df['Last Install Date'].dt.strftime('%m/%d/%Y').fillna('No Record')
+
 usage_30d = df_installed[df_installed['Install Date'] >= date_30_days_ago].groupby('Model Number')['Quantity'].sum().reset_index()
 usage_30d['30D Weekly Avg'] = usage_30d['Quantity'] / (30/7)
 
@@ -119,8 +124,9 @@ usage_7d['7D Weekly Avg'] = usage_7d['Quantity'] / 1
 master_df = all_time[['Model Number', 'Quantity', 'All Time Weekly Avg']]
 master_df = pd.merge(master_df, usage_30d, on='Model Number', how='left').rename(columns={'Quantity_y': 'Sold 30D'}).fillna(0)
 master_df = pd.merge(master_df, usage_7d, on='Model Number', how='left').rename(columns={'Quantity': 'Sold 7D'}).fillna(0)
+master_df = pd.merge(master_df, last_install_df, on='Model Number', how='left').fillna({'Last Install Date': 'No Record'})
 
-# 🔄 UPDATED: Sort by top 12 models over the last 30 days
+# 🔄 Sort by top 12 models over the last 30 days
 master_df = master_df.sort_values(by='Sold 30D', ascending=False).head(12).reset_index(drop=True)
 
 # Weights & Allocation Calculations
@@ -162,7 +168,7 @@ tab1, tab2, tab3 = st.tabs(["📋 Interactive Order Sheet", "📊 Forecasting Br
 
 with tab2:
     st.subheader("Data & Forecast Breakdown")
-    st.dataframe(master_df[['Model Number', 'Weighted Weekly Avg', 'Share %', 'Target Capacity', 'In Shop', 'Reserved']])
+    st.dataframe(master_df[['Model Number', 'Last Install Date', 'Weighted Weekly Avg', 'Share %', 'Target Capacity', 'In Shop', 'Reserved']])
 
 with tab1:
     st.subheader("Master Weekly Bulk Order Sheet")
@@ -177,6 +183,7 @@ with tab1:
         sold_7d = int(row['Sold 7D'])
         sold_30d = int(row['Sold 30D'])
         current_inv = int(row['In Shop'])
+        last_install_date = row['Last Install Date']
         
         bulk_price = bulk_lookup.get(model, 0.0)
         store_price = store_lookup.get(model, 0.0)
@@ -189,6 +196,7 @@ with tab1:
         order_sheet_data.append({
             "STATUS": status,
             "MODEL": model,
+            "LAST INSTALL DATE": last_install_date,
             "WAREHOUSE STOCK": current_inv,
             "PENDING INSTALLS": reserved,
             "ORDER QTY": order_amt, 
@@ -202,9 +210,11 @@ with tab1:
     order_df = pd.DataFrame(order_sheet_data)
     order_df = order_df.sort_values(by="SOLD IN LAST 30 DAYS", ascending=False)
 
+    # 🔄 Added LAST INSTALL DATE to the layout
     reordered_columns = [
         "STATUS",
         "MODEL",
+        "LAST INSTALL DATE",
         "WAREHOUSE STOCK",
         "PENDING INSTALLS",
         "ORDER QTY",  
@@ -232,7 +242,7 @@ with tab1:
             "NXLVL STORE PRICE": st.column_config.NumberColumn(format="$%.2f"),
             "SAVINGS": st.column_config.NumberColumn(format="$%.2f"),
         },
-        disabled=["STATUS", "MODEL", "WAREHOUSE STOCK", "PENDING INSTALLS", "INSTALLED/SOLD IN PAST 7 DAYS", "SOLD IN LAST 30 DAYS", "BULK PRICE ONLINE", "NXLVL STORE PRICE", "SAVINGS"],
+        disabled=["STATUS", "MODEL", "LAST INSTALL DATE", "WAREHOUSE STOCK", "PENDING INSTALLS", "INSTALLED/SOLD IN PAST 7 DAYS", "SOLD IN LAST 30 DAYS", "BULK PRICE ONLINE", "NXLVL STORE PRICE", "SAVINGS"],
         hide_index=True,
         use_container_width=True
     )
