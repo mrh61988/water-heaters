@@ -95,11 +95,11 @@ if target_mode == "💰 Budget Goal ($)":
 else:
     target_total_inventory = st.sidebar.slider("Target Total Warehouse Capacity", min_value=10, max_value=100, value=25)
 
-# 🔄 UPDATED: Swapped out sliders for clean, scannable numeric text input boxes
+# 🔄 UPDATED: Usage Weighting (%)
 st.sidebar.subheader("Usage Weighting (%)")
-weight_7d = st.sidebar.number_input("Last 7 Days Weight", min_value=0, max_value=100, value=60, step=1) 
+weight_7d = st.sidebar.number_input("Last 7 Days Weight", min_value=0, max_value=100, value=65, step=1) 
 weight_30d = st.sidebar.number_input("Last 30 Days Weight", min_value=0, max_value=100, value=30, step=1) 
-weight_all = st.sidebar.number_input("All-Time Weight", min_value=0, max_value=100, value=10, step=1)    
+weight_all = st.sidebar.number_input("All-Time Weight", min_value=0, max_value=100, value=5, step=1)    
 
 if (weight_7d + weight_30d + weight_all) != 100:
     st.sidebar.error("Weights must add up to 100%. Adjust to activate calculations.")
@@ -119,7 +119,9 @@ usage_7d['7D Weekly Avg'] = usage_7d['Quantity'] / 1
 master_df = all_time[['Model Number', 'Quantity', 'All Time Weekly Avg']]
 master_df = pd.merge(master_df, usage_30d, on='Model Number', how='left').rename(columns={'Quantity_y': 'Sold 30D'}).fillna(0)
 master_df = pd.merge(master_df, usage_7d, on='Model Number', how='left').rename(columns={'Quantity': 'Sold 7D'}).fillna(0)
-master_df = master_df.sort_values(by='Quantity_x', ascending=False).head(8).reset_index(drop=True)
+
+# 🔄 UPDATED: Sort by top 12 models over the last 30 days
+master_df = master_df.sort_values(by='Sold 30D', ascending=False).head(12).reset_index(drop=True)
 
 # Weights & Allocation Calculations
 w_7d, w_30d, w_all = weight_7d / 100.0, weight_30d / 100.0, weight_all / 100.0
