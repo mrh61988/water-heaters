@@ -88,6 +88,10 @@ total_weeks = (max_date - min_date).days / 7 if (max_date - min_date).days > 0 e
 # --- SIDEBAR SETTINGS ---
 st.sidebar.header("Warehouse & Order Settings")
 
+# 🔄 NEW: Adjustable Tax Rate
+tax_input = st.sidebar.number_input("Assumed Tax Rate (%)", min_value=0.0, max_value=50.0, value=8.5, step=0.1)
+TAX_RATE = tax_input / 100.0
+
 target_mode = st.sidebar.selectbox("Suggested Quantity Targeting Mode", ["💰 Budget Goal ($)", "📦 Warehouse Capacity (Units)"])
 
 if target_mode == "💰 Budget Goal ($)":
@@ -139,8 +143,6 @@ master_df['Share %'] = master_df['Weighted Weekly Avg'] / total_weighted_avg
 master_df = pd.merge(master_df, reserved_stock, on='Model Number', how='left').fillna(0)
 master_df['In Shop'] = master_df['Model Number'].map(inventory_lookup).fillna(0).astype(int)
 master_df['Bulk Price'] = master_df['Model Number'].map(bulk_lookup).fillna(0)
-
-TAX_RATE = 0.08
 
 # --- AUTOMATED BUDGET SOLVER LOOP ---
 if target_mode == "💰 Budget Goal ($)":
@@ -247,7 +249,7 @@ with tab1:
         use_container_width=True
     )
 
-    # --- 4. EXPANDED FINANCIAL TOTALS WITH ITEMIZED 8% TAX ---
+    # --- 4. EXPANDED FINANCIAL TOTALS WITH ITEMIZED TAX ---
     total_units = edited_df["ORDER QTY"].sum()
     
     base_bulk_cost = (edited_df["ORDER QTY"] * edited_df["BULK PRICE ONLINE"]).sum()
@@ -267,13 +269,13 @@ with tab1:
     with col_bulk:
         st.markdown("### 🏪 Bulk Ordering Price")
         st.write(f"**Subtotal:** ${base_bulk_cost:,.2f}")
-        st.write(f"**Estimated Tax (8.0%):** ${bulk_tax:,.2f}")
+        st.write(f"**Estimated Tax ({tax_input}%):** ${bulk_tax:,.2f}")
         st.markdown(f"**TOTAL BULK COST:** `${total_bulk_cost_with_tax:,.2f}`")
         
     with col_store:
         st.markdown("### 🏢 Regular Store Price")
         st.write(f"**Subtotal:** ${base_store_cost:,.2f}")
-        st.write(f"**Estimated Tax (8.0%):** ${store_tax:,.2f}")
+        st.write(f"**Estimated Tax ({tax_input}%):** ${store_tax:,.2f}")
         st.markdown(f"**TOTAL STORE COST:** `${total_store_cost_with_tax:,.2f}`")
         
     with col_summary:
@@ -308,7 +310,7 @@ Please send payment request to my cell. 804-536-4748
 
 **Subtotal:** ${base_bulk_cost:,.2f}
 
-**Estimated Tax (8.0%):** ${bulk_tax:,.2f}
+**Estimated Tax ({tax_input}%):** ${bulk_tax:,.2f}
 
 **TOTAL BULK COST:** ${total_bulk_cost_with_tax:,.2f}
         """
