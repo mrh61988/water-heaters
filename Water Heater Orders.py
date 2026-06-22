@@ -290,8 +290,22 @@ with tab1:
         for _, r in quick_copy_base.iterrows():
             table_markdown_rows += f"| {r['MODEL']} | {int(r['ORDER QTY'])} | ${r['BULK PRICE ONLINE']:,.2f} | ${r['NXLVL STORE PRICE']:,.2f} |\n"
 
-        email_rich_template = f"Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!\n\nPlease send payment request to my cell. 804-536-4748\n\n| MODEL | ORDER QTY | BULK PRICE | STORE PRICE |\n| :--- | :--- | :--- | :--- |\n{table_markdown_rows}\n**Total Quantity Ordered:** {int(total_units)} unit(s)\n**Subtotal:** ${base_bulk_cost:,.2f}\n**Estimated Tax ({tax_input}%):** ${bulk_tax:,.2f}\n**TOTAL BULK COST:** ${total_bulk_cost_with_tax:,.2f}"
-        st.markdown(f'<div style="background-color: #fcfcfc; padding: 25px; border-radius: 8px; border: 1px solid #eaeaea; line-height: 1.6;">{email_rich_template}</div>', unsafe_allow_html=True)
+        # Explicitly controlling the HTML/Markdown flow to strictly stack headers and ensure black text
+        email_rich_template = f"""
+Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!<br><br>
+Please send payment request to my cell. 804-536-4748<br><br>
+
+| MODEL | ORDER QTY | BULK PRICE | STORE PRICE |
+| :--- | :--- | :--- | :--- |
+{table_markdown_rows}
+
+<br>
+**Total Quantity Ordered:** {int(total_units)} unit(s)<br>
+**Subtotal:** ${base_bulk_cost:,.2f}<br>
+**Estimated Tax ({tax_input}%):** ${bulk_tax:,.2f}<br>
+**TOTAL BULK COST:** ${total_bulk_cost_with_tax:,.2f}
+"""
+        st.markdown(f'<div style="background-color: #fcfcfc; padding: 25px; border-radius: 8px; border: 1px solid #eaeaea; line-height: 1.6; color: #000000;">\n\n{email_rich_template}\n\n</div>', unsafe_allow_html=True)
     else:
         st.info("No items currently marked for order matching the current configuration.")
 
@@ -523,10 +537,7 @@ with tab3:
         calendar_data.append({"MODEL NUMBER": model, "NET AVAILABLE STOCK": net_stock, "DAILY CONSUMPTION VELOCITY": daily_vel, "EXPECTED STOCKOUT DEADLINE": deadline_str, "_raw_days_sort": loop_safety})
         
     calendar_df = pd.DataFrame(calendar_data).sort_values(by="_raw_days_sort", ascending=True)
-    
-    # 🔧 BUG FIX: Drop the column FIRST, then apply the Styler format.
     st.dataframe(calendar_df.drop(columns=["_raw_days_sort"]).style.format({"DAILY CONSUMPTION VELOCITY": "{:.2f}"}), hide_index=True, use_container_width=True)
-    
     st.write("---")
 
     # SANDBOX FEATURE 8: WEEKDAY RUSH PLANNER
