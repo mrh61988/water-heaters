@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import datetime
+import urllib.parse
 
 st.set_page_config(layout="wide")
 st.title("Water Heater Auto-Ordering Dashboard")
@@ -88,7 +89,7 @@ total_weeks = (max_date - min_date).days / 7 if (max_date - min_date).days > 0 e
 # --- SIDEBAR SETTINGS ---
 st.sidebar.header("Warehouse & Order Settings")
 
-# 🔄 NEW: Adjustable Tax Rate
+# Adjustable Tax Rate
 tax_input = st.sidebar.number_input("Assumed Tax Rate (%)", min_value=0.0, max_value=50.0, value=8.5, step=0.1)
 TAX_RATE = tax_input / 100.0
 
@@ -99,7 +100,7 @@ if target_mode == "💰 Budget Goal ($)":
 else:
     target_total_inventory = st.sidebar.slider("Target Total Warehouse Capacity", min_value=10, max_value=100, value=25)
 
-# 🔄 UPDATED: Usage Weighting (%)
+# Usage Weighting (%)
 st.sidebar.subheader("Usage Weighting (%)")
 weight_7d = st.sidebar.number_input("Last 7 Days Weight", min_value=0, max_value=100, value=65, step=1) 
 weight_30d = st.sidebar.number_input("Last 30 Days Weight", min_value=0, max_value=100, value=30, step=1) 
@@ -113,7 +114,7 @@ if (weight_7d + weight_30d + weight_all) != 100:
 all_time = df_installed.groupby('Model Number')['Quantity'].sum().reset_index()
 all_time['All Time Weekly Avg'] = all_time['Quantity'] / total_weeks
 
-# 🔄 NEW: Extract Last Install Date for each Model
+# Extract Last Install Date for each Model
 last_install_df = df_installed.groupby('Model Number')['Install Date'].max().reset_index()
 last_install_df.rename(columns={'Install Date': 'Last Install Date'}, inplace=True)
 last_install_df['Last Install Date'] = last_install_df['Last Install Date'].dt.strftime('%m/%d/%Y').fillna('No Record')
@@ -130,7 +131,7 @@ master_df = pd.merge(master_df, usage_30d, on='Model Number', how='left').rename
 master_df = pd.merge(master_df, usage_7d, on='Model Number', how='left').rename(columns={'Quantity': 'Sold 7D'}).fillna(0)
 master_df = pd.merge(master_df, last_install_df, on='Model Number', how='left').fillna({'Last Install Date': 'No Record'})
 
-# 🔄 Sort by top 12 models over the last 30 days
+# Sort by top 12 models over the last 30 days
 master_df = master_df.sort_values(by='Sold 30D', ascending=False).head(12).reset_index(drop=True)
 
 # Weights & Allocation Calculations
@@ -212,7 +213,6 @@ with tab1:
     order_df = pd.DataFrame(order_sheet_data)
     order_df = order_df.sort_values(by="SOLD IN LAST 30 DAYS", ascending=False)
 
-    # 🔄 Added LAST INSTALL DATE to the layout
     reordered_columns = [
         "STATUS",
         "MODEL",
@@ -329,7 +329,66 @@ Please send payment request to my cell. 804-536-4748
 with tab3:
     st.header("🧪 Advanced Logistics Feature Sandbox")
     st.write("Interact with prototypes of advanced logistical calculators using your live data metrics.")
+    st.write("---")
+
+    # ----------------------------------------------------
+    # NEW SANDBOX FEATURE: DIRECT VENDOR PORTAL EMAIL ENGINE
+    # ----------------------------------------------------
+    st.subheader("📬 1. Direct Vendor Portal Email Routing Engine")
+    st.write("Configure distribution contacts to generate a fast launcher link that formats your order instantly into your desktop email client.")
     
+    col_to, col_cc, col_sub = st.columns(3)
+    with col_to:
+        email_to = st.text_input("To (Distributor Order Desk Recipient):", value="orders@distributor.com")
+    with col_cc:
+        email_cc = st.text_input("CC (Internal Records / Management):", value="management@nexlvlservices.com")
+    with col_sub:
+        email_subject = st.text_input("Preferred Subject Line:", value="Weekly Bulk Water Heater Warehouse Stock Order")
+
+    quick_copy_sandbox = edited_df[edited_df["ORDER QTY"] > 0].copy()
+    
+    if not quick_copy_sandbox.empty:
+        # Build raw text email block for mailto payload injection
+        plain_text_body = "Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!\n\n"
+        plain_text_body += "Please send payment request to my cell. 804-536-4748\n\n"
+        plain_text_body += f"Total Quantity Ordered: {int(total_units)} unit(s)\n"
+        plain_text_body += f"Subtotal: ${base_bulk_cost:,.2f}\n"
+        plain_text_body += f"Estimated Tax ({tax_input}%): ${bulk_tax:,.2f}\n"
+        plain_text_body += f"TOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}\n\n"
+        plain_text_body += "ORDER DETAILS:\n"
+        plain_text_body += "----------------------------------------\n"
+        for _, r in quick_copy_sandbox.iterrows():
+            plain_text_body += f"• Model: {r['MODEL']} | Qty: {int(r['ORDER QTY'])} | Bulk Unit Price: ${r['BULK PRICE ONLINE']:,.2f}\n"
+        plain_text_body += "----------------------------------------\n"
+        
+        # Safe URL encoding for mailto integration link
+        safe_to = urllib.parse.quote(email_to)
+        safe_cc = urllib.parse.quote(email_cc)
+        safe_sub = urllib.parse.quote(email_subject)
+        safe_body = urllib.parse.quote(plain_text_body)
+        
+        mailto_url = f"mailto:{safe_to}?cc={safe_cc}&subject={safe_sub}&body={safe_body}"
+        
+        st.markdown(f'<a href="{mailto_url}" target="_blank" style="text-decoration:none;"><button style="background-color:#007bff; color:white; border:none; padding:12px 24px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:15px;">📧 Open Desktop Email Client & Pre-Fill Order</button></a>', unsafe_allow_html=True)
+        st.caption("Converts your current Interactive Order Sheet live selections straight into an outbound draft.")
+    else:
+        st.info("Mark models for order on Tab 1 to activate the email generation engine preview.")
+    st.write("---")
+
+    # ----------------------------------------------------
+    # NEW SANDBOX FEATURE: SEASONAL DEMAND WEATHER FORECASTING
+    # ----------------------------------------------------
+    st.subheader("☀️ 2. Seasonal Demand Forecasting (Weather Correlation)")
+    st.write("Groundwater temperatures directly affect the thermal scaling stress of water heater storage elements. Activate regional heat metrics to dynamically simulate safety stock thresholds.")
+    
+    heat_wave_active = st.toggle("Simulate Regional Summer Heat Wave Strain (Extreme Ambient Tracking)", value=False)
+    
+    if heat_wave_active:
+        st.warning("🔥 Regional Summer Heat Wave Simulation Active. Safety buffers on thermal-demand units automatically expanded by +25% to account for peak expansion cycles.")
+        multiplier_buffer = 1.25
+    else:
+        multiplier_buffer = 1.00
+
     # Global Blackout Date Rule Engine (No Sundays, No Thanksgiving, No Christmas Day)
     def is_operational_day(check_date):
         if check_date.weekday() == 6:  # Sunday
@@ -341,9 +400,9 @@ with tab3:
         return True
 
     # ----------------------------------------------------
-    # SANDBOX FEATURE 1: RUNOUT TRACKER
+    # SANDBOX FEATURE 3: RUNOUT TRACKER
     # ----------------------------------------------------
-    st.subheader("1. Runout Tracker (Days of Stock Left)")
+    st.subheader("3. Runout Tracker (Days of Stock Left)")
     st.write("Calculates how many days until you run out using your current stock minus pending jobs, divided by sales velocity.")
     
     velocity_slider = st.slider("Simulated Sales Velocity Multiplier", min_value=0.5, max_value=3.0, value=1.0, step=0.1, help="Simulates spikes or dips in active installation trends.")
@@ -356,7 +415,8 @@ with tab3:
         sold_7d = int(row['Sold 7D'])
         sold_30d = int(row['Sold 30D'])
         
-        daily_velocity = (row['Weighted Weekly Avg'] / 7.0) * velocity_slider
+        # Apply the seasonal weather correlation multiplier factor straight into daily velocities
+        daily_velocity = (row['Weighted Weekly Avg'] / 7.0) * velocity_slider * multiplier_buffer
         net_stock = shop_stock - reserved
         
         if daily_velocity <= 0:
@@ -400,9 +460,9 @@ with tab3:
     st.write("---")
 
     # ----------------------------------------------------
-    # SANDBOX FEATURE 2: VISUAL ANALYTICS AND CHARTS
+    # SANDBOX FEATURE 4: VISUAL ANALYTICS AND CHARTS
     # ----------------------------------------------------
-    st.subheader("2. Sales Visualizer (What's Hot)")
+    st.subheader("4. Sales Visualizer (What's Hot)")
     st.write("An instant text grid showing your sales volume, sorted from highest to lowest volume automatically.")
     
     sales_table_df = master_df[['Model Number', 'Sold 30D']].copy()
@@ -413,9 +473,9 @@ with tab3:
     st.write("---")
 
     # ----------------------------------------------------
-    # SANDBOX FEATURE 3: DEAD STOCK DETECTOR
+    # SANDBOX FEATURE 5: DEAD STOCK DETECTOR
     # ----------------------------------------------------
-    st.subheader("3. Dead Stock Finder (Dust Collectors)")
+    st.subheader("5. Dead Stock Finder (Dust Collectors)")
     st.write("Flags models that have items sitting on warehouse shelves but show absolute zero installation activity during selected time horizons.")
     
     dead_stock_days = st.selectbox("Inactivity Window Horizon", [7, 30], index=1)
@@ -439,9 +499,9 @@ with tab3:
     st.write("---")
 
     # ----------------------------------------------------
-    # SANDBOX FEATURE 4: SAFETY STOCK & REORDER POINTS (ROP)
+    # SANDBOX FEATURE 6: SAFETY STOCK & REORDER POINTS (ROP)
     # ----------------------------------------------------
-    st.subheader("4. Smart Reorder Trigger (When to Buy)")
+    st.subheader("6. Smart Reorder Trigger (When to Buy)")
     st.write("Calculates standard logistics points based on your specific turnaround windows.")
     
     col_lead, col_cushion = st.columns(2)
@@ -453,7 +513,8 @@ with tab3:
     rop_data = []
     for index, row in master_df.iterrows():
         model = row['Model Number']
-        daily_vel = row['Weighted Weekly Avg'] / 7.0
+        # Incorporates the seasonal weather multiplier tracking straight into target calculation triggers
+        daily_vel = (row['Weighted Weekly Avg'] / 7.0) * multiplier_buffer
         current_inv = inventory_lookup.get(model, 0)
         
         reorder_point = (daily_vel * param_lead_time) + (daily_vel * param_safety_cushion)
@@ -477,9 +538,9 @@ with tab3:
     st.write("---")
 
     # ----------------------------------------------------
-    # SANDBOX FEATURE 5: CALENDAR DEADLINES
+    # SANDBOX FEATURE 7: CALENDAR DEADLINES
     # ----------------------------------------------------
-    st.subheader("5. Exact Calendar Stockout Deadlines")
+    st.subheader("7. Exact Calendar Stockout Deadlines")
     st.write("Projects exact calendar dates when inventory drops to zero, skipping Sundays and major field holidays.")
     
     calendar_data = []
@@ -488,12 +549,14 @@ with tab3:
     for index, row in master_df.iterrows():
         model = row['Model Number']
         net_stock = int(row['In Shop']) - int(row['Reserved'])
-        daily_vel = row['Weighted Weekly Avg'] / 7.0
+        daily_vel = (row['Weighted Weekly Avg'] / 7.0) * multiplier_buffer
         
         if net_stock <= 0:
             deadline_str = "❌ OUT OF STOCK NOW"
+            loop_safety = 0
         elif daily_vel <= 0:
             deadline_str = "Stable Stock (No Active Demand)"
+            loop_safety = 999
         else:
             sim_stock = float(net_stock)
             current_projected_date = base_date
@@ -512,17 +575,17 @@ with tab3:
             "NET AVAILABLE STOCK": net_stock,
             "DAILY CONSUMPTION VELOCITY": daily_vel,
             "EXPECTED STOCKOUT DEADLINE": deadline_str,
-            "_raw_days_sort": loop_safety if net_stock > 0 and daily_vel > 0 else (0 if net_stock <= 0 else 999)
+            "_raw_days_sort": loop_safety
         })
         
-    calendar_df = pd.DataFrame(calendar_data).sort_values(by="_raw_days_sort", ascending=True).drop(columns=["_raw_days_sort"])
+    calendar_df = pd.DataFrame(calendar_data).sort_values(by="_raw_days_sort", ascending=True).drop(columns=["_raw_sort_key"], errors="ignore")
     st.dataframe(calendar_df.style.format({"DAILY CONSUMPTION VELOCITY": "{:.2f}"}), hide_index=True, use_container_width=True)
     st.write("---")
 
     # ----------------------------------------------------
-    # SANDBOX FEATURE 6: WEEKDAY RUSH PLANNER
+    # SANDBOX FEATURE 8: WEEKDAY RUSH PLANNER
     # ----------------------------------------------------
-    st.subheader("6. Weekday Rush Planner (48-Hour Order Scheduling)")
+    st.subheader("8. Weekday Rush Planner (48-Hour Order Scheduling)")
     st.write("Maps your real installation volume from Monday to Saturday to identify volume spikes and schedule orders around your 48-hour delivery timeline.")
     
     if not df_installed.empty and 'Install Date' in df_installed.columns:
@@ -580,9 +643,9 @@ with tab3:
     st.write("---")
 
     # ----------------------------------------------------
-    # SANDBOX FEATURE 7: JOB DEMAND PREDICTABILITY SCORE
+    # SANDBOX FEATURE 9: JOB DEMAND PREDICTABILITY SCORE
     # ----------------------------------------------------
-    st.subheader("7. Job Demand Predictability Score (Smooth vs. Wild)")
+    st.subheader("9. Job Demand Predictability Score (Smooth vs. Wild)")
     st.write("Analyzes historical timing intervals between installations. High variance flags chaotic demand spikes; low variance signals predictable stability.")
 
     if not df_installed.empty:
