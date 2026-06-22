@@ -523,7 +523,10 @@ with tab3:
         calendar_data.append({"MODEL NUMBER": model, "NET AVAILABLE STOCK": net_stock, "DAILY CONSUMPTION VELOCITY": daily_vel, "EXPECTED STOCKOUT DEADLINE": deadline_str, "_raw_days_sort": loop_safety})
         
     calendar_df = pd.DataFrame(calendar_data).sort_values(by="_raw_days_sort", ascending=True)
-    st.dataframe(calendar_df.style.format({"DAILY CONSUMPTION VELOCITY": "{:.2f}"}).drop(columns=["_raw_days_sort"]), hide_index=True, use_container_width=True)
+    
+    # 🔧 BUG FIX: Drop the column FIRST, then apply the Styler format.
+    st.dataframe(calendar_df.drop(columns=["_raw_days_sort"]).style.format({"DAILY CONSUMPTION VELOCITY": "{:.2f}"}), hide_index=True, use_container_width=True)
+    
     st.write("---")
 
     # SANDBOX FEATURE 8: WEEKDAY RUSH PLANNER
