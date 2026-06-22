@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 import datetime
 import urllib.parse
+import plotly.express as px
 
 st.set_page_config(layout="wide")
 st.title("Water Heater Auto-Ordering Dashboard")
@@ -144,10 +145,15 @@ usage_7d['7D Weekly Avg'] = (usage_7d['Quantity'] / op_days_7d) * 6
 usage_trend_baseline = df_installed[(df_installed['Install Date'] >= date_21_days_ago) & (df_installed['Install Date'] <= date_14_days_ago)].groupby('Model Number')['Quantity'].sum().reset_index()
 usage_trend_baseline['Historical Weekly Baseline'] = (usage_trend_baseline['Quantity'] / op_days_trend_window) * 6
 
-# Assemble Base Dataset Frame
+# Assemble Base Dataset Frame (WITH KEY ERROR FIX)
 master_df = all_time[['Model Number', 'Quantity', 'All Time Weekly Avg']]
-master_df = pd.merge(master_df, usage_30d, on='Model Number', how='left').rename(columns={'Quantity_y': 'Sold 30D'}).fillna(0)
-master_df = pd.merge(master_df, usage_7d, on='Model Number', how='left').rename(columns={'Quantity': 'Sold 7D'}).fillna(0)
+
+master_df = pd.merge(master_df, usage_30d, on='Model Number', how='left')
+master_df = master_df.rename(columns={'Quantity_x': 'Quantity', 'Quantity_y': 'Sold 30D'}).fillna(0)
+
+master_df = pd.merge(master_df, usage_7d, on='Model Number', how='left')
+master_df = master_df.rename(columns={'Quantity_x': 'Quantity', 'Quantity_y': 'Sold 7D'}).fillna(0)
+
 master_df = pd.merge(master_df, last_install_df, on='Model Number', how='left').fillna({'Last Install Date': 'No Record'})
 master_df = pd.merge(master_df, usage_trend_baseline[['Model Number', 'Historical Weekly Baseline']], on='Model Number', how='left').fillna(0)
 
@@ -321,9 +327,17 @@ with tab2:
         # 3. Catalog Market Volume Saturation Pie Chart Visualizer Module
         st.subheader("🍕 Catalog Saturation Market Share Volume")
         st.write("Percentage share breakdown of top catalog items relative to comprehensive service footprints:")
+        
+        # Generates a clean interactive pie chart using Plotly Express
         pie_data = master_df[['Model Number', 'Quantity']].copy()
-        pie_data.columns = ['Model Number', 'Total Historical Installed Units']
-        st.pie_chart(pie_data, values='Total Historical Installed Units', names='Model Number')
+        if not pie_data.empty and pie_data['Quantity'].sum() > 0:
+            fig = px.pie(pie_data, values='Quantity', names='Model Number', hole=0.3, 
+                         color_discrete_sequence=px.colors.sequential.Teal)
+            fig.update_traces(textposition='inside', textinfo='percent+label')
+            fig.update_layout(showlegend=False, margin=dict(t=0, b=0, l=0, r=0))
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Insufficient data to render Catalog Saturation Chart.")
 
     st.write("---")
     
@@ -370,9 +384,11 @@ with tab3:
     with col_cc: email_cc = st.text_input("CC (Internal Records / Management):", value="management@nexlvlservices.com")
     with col_sub: email_subject = st.text_input("Preferred Subject Line:", value="Weekly Bulk Water Heater Warehouse Stock Order")
 
+    quick_copy_sandbox = edited_df[edited_df["ORDER QTY"] > 0].copy()
+
     if not quick_copy_sandbox.empty:
         plain_text_body = f"Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!\n\nPlease send payment request to my cell. 804-536-4748\n\nTotal Quantity Ordered: {int(total_units)} unit(s)\nSubtotal: ${base_bulk_cost:,.2f}\nEstimated Tax ({tax_input}%): ${bulk_tax:,.2f}\nTOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}\n\nORDER DETAILS:\n----------------------------------------\n"
-        for _, r in quick_copy_base.iterrows():
+        for _, r in quick_copy_sandbox.iterrows():
             plain_text_body += f"• Model: {r['MODEL']} | Qty: {int(r['ORDER QTY'])} | Bulk Unit Price: ${r['BULK PRICE ONLINE']:,.2f}\n"
         plain_text_body += "----------------------------------------\n"
         
@@ -429,13 +445,10 @@ with tab3:
     st.dataframe(sales_table_df, hide_index=True, use_container_width=True)
     st.write("---")
 
-    # ----------------------------------------------------
     # UPGRADED SANDBOX FEATURE 5: DEAD STOCK DETECTOR WITH HORIZON INPUT CONTROLLER
-    # ----------------------------------------------------
     st.subheader("🕷️ 5. Dead Stock Finder (Inactivity Horizon Threshold Controller)")
     st.write("Trace low-velocity or stagnant warehouse inventory that has recorded zero sales activity across custom lookback parameters:")
     
-    # Precise numerical lookback horizon input controller widget config
     dead_stock_days_horizon = st.number_input("Enter Custom Inactivity Horizon Window Threshold (Days):", min_value=1, max_value=180, value=45, step=1)
     
     horizon_cutoff_date = max_date - pd.Timedelta(days=dead_stock_days_horizon)
@@ -497,7 +510,6 @@ with tab3:
                 current_projected_date += datetime.timedelta(days=1)
                 
                 # Check calendar deadlines using explicit blackout workday logic rules
-                # Checks structural validation conditions (skipping operational days)
                 is_op = True
                 if current_projected_date.weekday() == 6: is_op = False
                 elif current_projected_date.month == 12 and current_projected_date.day == 25: is_op = False
