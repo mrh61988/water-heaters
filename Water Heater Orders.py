@@ -410,10 +410,20 @@ with tab3:
     quick_copy_sandbox = edited_df[edited_df["ORDER QTY"] > 0].copy()
 
     if not quick_copy_sandbox.empty:
-        plain_text_body = f"Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!\n\nPlease send payment request to my cell. 804-536-4748\n\nTotal Quantity Ordered: {int(total_units)} unit(s)\nSubtotal: ${base_bulk_cost:,.2f}\nEstimated Tax ({tax_input}%): ${bulk_tax:,.2f}\nTOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}\n\nORDER DETAILS:\n----------------------------------------\n"
+        
+        # EXACT FORMATTING MATCH to Tab 1 using plain text equivalent layout for URL parameters
+        plain_text_body = "Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!\n\n"
+        plain_text_body += "Please send payment request to my cell. 804-536-4748\n\n"
+        plain_text_body += "MODEL | ORDER QTY | BULK PRICE | STORE PRICE\n"
+        plain_text_body += "---------------------------------------------------------\n"
+        
         for _, r in quick_copy_sandbox.iterrows():
-            plain_text_body += f"• Model: {r['MODEL']} | Qty: {int(r['ORDER QTY'])} | Bulk Unit Price: ${r['BULK PRICE ONLINE']:,.2f}\n"
-        plain_text_body += "----------------------------------------\n"
+            plain_text_body += f"{r['MODEL']} | {int(r['ORDER QTY'])} | ${r['BULK PRICE ONLINE']:,.2f} | ${r['NXLVL STORE PRICE']:,.2f}\n"
+        
+        plain_text_body += f"\nTotal Quantity Ordered: {int(total_units)} unit(s)\n"
+        plain_text_body += f"Subtotal: ${base_bulk_cost:,.2f}\n"
+        plain_text_body += f"Estimated Tax ({tax_input}%): ${bulk_tax:,.2f}\n"
+        plain_text_body += f"TOTAL BULK COST: ${total_bulk_cost_with_tax:,.2f}"
         
         safe_to = urllib.parse.quote(email_to)
         safe_cc = urllib.parse.quote(email_cc)
