@@ -397,10 +397,15 @@ with tab3:
 
     # SANDBOX FEATURE 1: DIRECT VENDOR PORTAL EMAIL ENGINE
     st.subheader("📬 1. Direct Vendor Portal Email Routing Engine")
+    
+    default_to = '"Frey, Zac" <zac.frey@lowes.com>, "Drury, Ricky" <ricky.drury@store.lowes.com>, "Sherman, Kenneth" <kenneth.sherman@store.lowes.com>, "Hawkins, Danny" <danny.a.hawkins@store.lowes.com>'
+    default_cc = 'Jarren Heward <jarren@nex-lvl.com>, Dominic Cruz <dominic@nex-lvl.com>, Brenton Heward <brenton@nex-lvl.com>'
+    default_sub = f"Lowes Water Heater Order: Brincor/NexLvl {datetime.date.today().strftime('%m/%d/%Y')}"
+
     col_to, col_cc, col_sub = st.columns(3)
-    with col_to: email_to = st.text_input("To (Distributor Order Desk Recipient):", value="orders@distributor.com")
-    with col_cc: email_cc = st.text_input("CC (Internal Records / Management):", value="management@nexlvlservices.com")
-    with col_sub: email_subject = st.text_input("Preferred Subject Line:", value="Weekly Bulk Water Heater Warehouse Stock Order")
+    with col_to: email_to = st.text_input("To (Distributor Order Desk Recipient):", value=default_to)
+    with col_cc: email_cc = st.text_input("CC (Internal Records / Management):", value=default_cc)
+    with col_sub: email_subject = st.text_input("Preferred Subject Line:", value=default_sub)
 
     quick_copy_sandbox = edited_df[edited_df["ORDER QTY"] > 0].copy()
 
