@@ -377,6 +377,10 @@ with tab2:
             
             # Formatting layout configurations to simplify raw MultiIndex outputs
             pivot_matrix.columns = [f"{yr} - {m_name}" for yr, m_num, m_name in pivot_matrix.columns]
+            
+            # --- NEW ADDITION: Add a Total row calculating the sum of all models per month ---
+            pivot_matrix.loc['TOTAL (ALL MODELS)'] = pivot_matrix.sum()
+            
             st.dataframe(pivot_matrix, use_container_width=True)
         else:
             st.info("Insufficient historical date metrics available to compile long-horizon summary tables.")
