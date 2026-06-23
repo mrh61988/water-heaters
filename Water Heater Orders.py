@@ -415,9 +415,15 @@ with tab3:
             plain_text_body += f"• Model: {r['MODEL']} | Qty: {int(r['ORDER QTY'])} | Bulk Unit Price: ${r['BULK PRICE ONLINE']:,.2f}\n"
         plain_text_body += "----------------------------------------\n"
         
-        safe_to, safe_cc, safe_sub, safe_body = urllib.parse.quote(email_to), urllib.parse.quote(email_cc), urllib.parse.quote(email_subject), urllib.parse.quote(plain_text_body)
-        mailto_url = f"mailto:{safe_to}?cc={safe_cc}&subject={safe_sub}&body={safe_body}"
-        st.markdown(f'<a href="{mailto_url}" target="_blank" style="text-decoration:none;"><button style="background-color:#007bff; color:white; border:none; padding:12px 24px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:15px;">📧 Open Desktop Email Client & Pre-Fill Order</button></a>', unsafe_allow_html=True)
+        safe_to = urllib.parse.quote(email_to)
+        safe_cc = urllib.parse.quote(email_cc)
+        safe_sub = urllib.parse.quote(email_subject)
+        safe_body = urllib.parse.quote(plain_text_body)
+        
+        # 🔗 Use Google Web Compose URL to explicitly force a Gmail Draft
+        gmail_url = f"https://mail.google.com/mail/?view=cm&fs=1&to={safe_to}&cc={safe_cc}&su={safe_sub}&body={safe_body}"
+        
+        st.markdown(f'<a href="{gmail_url}" target="_blank" style="text-decoration:none;"><button style="background-color:#db4437; color:white; border:none; padding:12px 24px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:15px;">📧 Create Draft in Gmail</button></a>', unsafe_allow_html=True)
     else:
         st.info("Mark models for order on Tab 1 to activate the email engine preview.")
     st.write("---")
