@@ -528,11 +528,15 @@ with tab3:
     horizon_cutoff_date = max_date - pd.Timedelta(days=dead_stock_days_horizon)
     active_sales_in_horizon = df_installed[df_installed['Install Date'] >= horizon_cutoff_date].groupby('Model Number')['Quantity'].sum().to_dict()
     
+    # Build a quick lookup for last install date across ALL models
+    last_install_lookup = last_install_df.set_index('Model Number')['Last Install Date'].to_dict()
+
     dead_stock_list = []
     for model, stock in inventory_lookup.items():
         if stock > 0 and active_sales_in_horizon.get(model, 0) == 0:
             dead_stock_list.append({
                 "STAGNANT CATLOG SKU MODEL": model,
+                "LAST INSTALL DATE": last_install_lookup.get(model, 'No Record'),
                 "PHYSICAL UNITS SITTING ON RACKS": int(stock),
                 "RECORDED INSTALL CONSUMPTION": 0,
                 "LOGISTICAL RECOMMENDATION": f"Flag as Dead Capital / Review Floor Space Allocation (Zero movement in {dead_stock_days_horizon} Days)"
