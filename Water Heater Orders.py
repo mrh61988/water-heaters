@@ -378,10 +378,45 @@ with tab2:
             # Formatting layout configurations to simplify raw MultiIndex outputs
             pivot_matrix.columns = [f"{yr} - {m_name}" for yr, m_num, m_name in pivot_matrix.columns]
             
-            # --- NEW ADDITION: Add a Total row calculating the sum of all models per month ---
+            # --- Add a Total row calculating the sum of all models per month ---
             pivot_matrix.loc['TOTAL (ALL MODELS)'] = pivot_matrix.sum()
             
             st.dataframe(pivot_matrix, use_container_width=True)
+            
+            # --- 5. NEW: Top 5 Models by Month Table ---
+            st.write("---")
+            st.subheader("🏆 Top 5 Models by Month")
+            st.write("Monthly breakdown of the highest volume models to quickly identify shifting seasonal popularity.")
+            
+            # Group data by Month and Model, sum quantities
+            monthly_models = matrix_filtered.groupby(['Year', 'Month_Num', 'Month', 'Model Number'])['Quantity'].sum().reset_index()
+            
+            # Sort by Month chronologically, then by Quantity descending
+            monthly_models = monthly_models.sort_values(by=['Year', 'Month_Num', 'Quantity'], ascending=[True, True, False])
+            
+            # Rank them per month
+            monthly_models['Rank'] = monthly_models.groupby(['Year', 'Month_Num', 'Month']).cumcount() + 1
+            
+            # Filter to keep only the top 5
+            top5_monthly = monthly_models[monthly_models['Rank'] <= 5].copy()
+            
+            # Format the output string for the cells (e.g., "Model_Name (15)")
+            top5_monthly['Display'] = top5_monthly['Model Number'] + " (" + top5_monthly['Quantity'].astype(int).astype(str) + ")"
+            
+            # Pivot table to make columns the Year-Months and rows the Ranks 1-5
+            top5_pivot = top5_monthly.pivot_table(
+                index='Rank',
+                columns=['Year', 'Month_Num', 'Month'],
+                values='Display',
+                aggfunc='first' # Just grab the string we built
+            ).fillna('-')
+            
+            # Make columns match the previous matrix table
+            top5_pivot.columns = [f"{yr} - {m_name}" for yr, m_num, m_name in top5_pivot.columns]
+            top5_pivot.index.name = "Monthly Rank"
+            
+            st.dataframe(top5_pivot, use_container_width=True)
+            
         else:
             st.info("Insufficient historical date metrics available to compile long-horizon summary tables.")
     else:
