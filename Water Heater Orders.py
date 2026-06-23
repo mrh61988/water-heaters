@@ -383,7 +383,7 @@ with tab2:
             
             st.dataframe(pivot_matrix, use_container_width=True)
             
-            # --- 5. NEW: Top 5 Models by Month Table ---
+            # --- 5. Top 5 Models by Month Table ---
             st.write("---")
             st.subheader("🏆 Top 5 Models by Month")
             st.write("Monthly breakdown of the highest volume models to quickly identify shifting seasonal popularity.")
@@ -408,7 +408,7 @@ with tab2:
                 index='Rank',
                 columns=['Year', 'Month_Num', 'Month'],
                 values='Display',
-                aggfunc='first' # Just grab the string we built
+                aggfunc='first'
             ).fillna('-')
             
             # Make columns match the previous matrix table
@@ -667,3 +667,74 @@ with tab3:
         st.dataframe(predictability_df.style.map(style_predictability, subset=["DEMAND PROFILE GRADE"]), hide_index=True, use_container_width=True)
     else:
         st.info("Insufficient job history to process interval scoring models.")
+    st.write("---")
+
+    # NEW SANDBOX FEATURE 10: LOWE'S RETURN WINDOW COUNTDOWN
+    st.subheader("📦 10. Lowe's Return Window Countdown (90-Day Dead Weight Alert)")
+    st.write("Track stagnant equipment models currently on your shelves that are approaching Lowe's 90-day return policy threshold:")
+    
+    countdown_data = []
+    for index, row in master_df.iterrows():
+        model = row['Model Number']
+        shop_stock = int(row['In Shop'])
+        last_date_str = row['Last Install Date']
+        
+        if shop_stock > 0:
+            if last_date_str != 'No Record':
+                last_date_dt = pd.to_datetime(last_date_str)
+                days_stagnant = (max_date - last_date_dt).days
+            else:
+                days_stagnant = 65  # Safety baseline calculation assignment
+            
+            days_to_return = max(0, 90 - days_stagnant)
+            if days_to_return <= 15:
+                status_flag = "🚨 CRITICAL: Return to Store Now"
+            elif days_to_return <= 45:
+                status_flag = "⚠️ WARNING: Stagnant Stock Asset"
+            else:
+                status_flag = "🟢 SAFE: Inside Return Window"
+                
+            countdown_data.append({
+                "MODEL SKU ID": model, "WAREHOUSE STOCK": shop_stock, "LAST RECORDED INSTALL": last_date_str,
+                "DAYS SITTING INACTIVE": days_stagnant, "DAYS REMAINING FOR RETURN POLICY": f"{days_to_return} Days Left",
+                "RETURN WINDOW STATUS": status_flag, "_raw_days_sort": days_to_return
+            })
+            
+    if countdown_data:
+        countdown_df = pd.DataFrame(countdown_data).sort_values(by="_raw_days_sort", ascending=True)
+        def style_countdown(val):
+            if "CRITICAL" in str(val): return 'background-color: #fce8e6; color: #a83232; font-weight: bold;'
+            if "WARNING" in str(val): return 'background-color: #fff3cd; color: #856404; font-weight: bold;'
+            return 'background-color: #d4edda; color: #155724;'
+        st.dataframe(countdown_df.drop(columns=["_raw_days_sort"]).style.map(style_countdown, subset=["RETURN WINDOW STATUS"]), hide_index=True, use_container_width=True)
+    else:
+        st.info("Excellent footprint logistics! No physical rack stock matches dead return window parameter lookbacks.")
+    st.write("---")
+
+    # NEW SANDBOX FEATURE 11: 4-WEEK CASH OUTFLOW RUNWAY PROJECTION
+    st.subheader("💰 11. 4-Week Cash Outflow Runway Projection")
+    st.write("Forward-looking rolling projection of expected capital required week-over-week to replenish inventory velocity and preserve target capacities:")
+    
+    runway_rows = []
+    for week_num in range(1, 5):
+        total_projected_units = 0.0
+        total_estimated_cost = 0.0
+        
+        for index, row in master_df.iterrows():
+            # Compiles dynamic adjustments from sandbox velocity and heat-wave sliders
+            daily_vel = (row['Weighted Weekly Avg'] / 6.0) * velocity_slider * multiplier_buffer
+            weekly_demand = daily_vel * 6.0  # Normalized standard 6-day work week footprint
+            bulk_p = bulk_lookup.get(row['Model Number'], 0.0)
+            
+            total_projected_units += weekly_demand
+            total_estimated_cost += (weekly_demand * bulk_p) * (1 + TAX_RATE)
+            
+        runway_rows.append({
+            "TIMEFRAME FORECAST RUNWAY": f"Week {week_num} Operational Projection",
+            "EXPECTED UNITS CONSUMED": int(round(total_projected_units)),
+            "ESTIMATED REPLENISHMENT CAPITAL REQUIREMENT (WITH TAX)": total_estimated_cost
+        })
+        
+    runway_df = pd.DataFrame(runway_rows)
+    st.dataframe(runway_df.style.format({"ESTIMATED REPLENISHMENT CAPITAL REQUIREMENT (WITH TAX)": "${:,.2f}"}), hide_index=True, use_container_width=True)
+    st.write("---")
