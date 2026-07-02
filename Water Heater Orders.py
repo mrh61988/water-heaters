@@ -120,8 +120,8 @@ else:
 
 st.sidebar.subheader("Usage Weighting (%)")
 weight_7d = st.sidebar.number_input("Last 7 Days Weight", min_value=0, max_value=100, value=65, step=1) 
-weight_30d = st.sidebar.number_input("Last 30 Days Weight", min_value=0, max_value=100, value=30, step=1) 
-weight_all = st.sidebar.number_input("All-Time Weight", min_value=0, max_value=100, value=5, step=1)    
+weight_30d = st.sidebar.number_input("Last 30 Days Weight", min_value=0, max_value=100, value=35, step=1) 
+weight_all = st.sidebar.number_input("All-Time Weight", min_value=0, max_value=100, value=0, step=1)    
 
 if (weight_7d + weight_30d + weight_all) != 100:
     st.sidebar.error("Weights must equal 100% total.")
