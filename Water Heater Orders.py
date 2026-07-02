@@ -576,6 +576,11 @@ with tab3:
     base_date = datetime.date.today()
     
     for index, row in master_df.iterrows():
+        
+        # EXCLUSION FIX: Exclude models not installed or sold in the last 30 days
+        if int(row['Sold 30D']) <= 0:
+            continue
+            
         model = row['Model Number']
         net_stock = int(row['In Shop']) - int(row['Reserved'])
         daily_vel = (row['Weighted Weekly Avg'] / 6.0) * multiplier_buffer
@@ -583,7 +588,9 @@ with tab3:
         if net_stock <= 0: deadline_str, loop_safety = "❌ OUT OF STOCK NOW", 0
         elif daily_vel <= 0: deadline_str, loop_safety = "Stable Stock (No Active Demand)", 999
         else:
-            sim_stock, current_projected_date, loop_safety = float(net_stock), base_date, 0
+            sim_stock, float_net_stock = float(net_stock), float(net_stock)
+            current_projected_date = base_date
+            loop_safety = 0
             while sim_stock > 0 and loop_safety < 365:
                 current_projected_date += datetime.timedelta(days=1)
                 
