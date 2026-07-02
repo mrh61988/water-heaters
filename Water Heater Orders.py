@@ -100,7 +100,7 @@ date_14_days_ago = max_date - pd.Timedelta(days=14)
 date_21_days_ago = max_date - pd.Timedelta(days=21)
 date_30_days_ago = max_date - pd.Timedelta(days=30)
 
-# True Operational Workday Denominators (Eliminating Sunday/Holiday biases)
+# True Operational Workday Denominators
 op_days_all = get_operational_days_count(min_date, max_date)
 op_days_7d = get_operational_days_count(date_7_days_ago, max_date)
 op_days_30d = get_operational_days_count(date_30_days_ago, max_date)
@@ -129,7 +129,7 @@ if (weight_7d + weight_30d + weight_all) != 100:
 
 # Build Timeframe Aggregations
 all_time = df_installed.groupby('Model Number')['Quantity'].sum().reset_index()
-all_time['All Time Weekly Avg'] = (all_time['Quantity'] / op_days_all) * 6  # Normalized standard 6-day operational week
+all_time['All Time Weekly Avg'] = (all_time['Quantity'] / op_days_all) * 6
 
 last_install_df = df_installed.groupby('Model Number')['Install Date'].max().reset_index()
 last_install_df.rename(columns={'Install Date': 'Last Install Date'}, inplace=True)
@@ -141,37 +141,27 @@ usage_30d['30D Weekly Avg'] = (usage_30d['Quantity'] / op_days_30d) * 6
 usage_7d = df_installed[df_installed['Install Date'] >= date_7_days_ago].groupby('Model Number')['Quantity'].sum().reset_index()
 usage_7d['7D Weekly Avg'] = (usage_7d['Quantity'] / op_days_7d) * 6
 
-# Velocity Momentum Analytics Evaluation (7-Day vs Previous 14-21 Day Baseline Gap)
 usage_trend_baseline = df_installed[(df_installed['Install Date'] >= date_21_days_ago) & (df_installed['Install Date'] <= date_14_days_ago)].groupby('Model Number')['Quantity'].sum().reset_index()
 usage_trend_baseline['Historical Weekly Baseline'] = (usage_trend_baseline['Quantity'] / op_days_trend_window) * 6
 
-# Assemble Base Dataset Frame
 master_df = all_time[['Model Number', 'Quantity', 'All Time Weekly Avg']]
-
 master_df = pd.merge(master_df, usage_30d, on='Model Number', how='left')
 master_df = master_df.rename(columns={'Quantity_x': 'Quantity', 'Quantity_y': 'Sold 30D'}).fillna(0)
-
 master_df = pd.merge(master_df, usage_7d, on='Model Number', how='left')
 master_df = master_df.rename(columns={'Quantity_x': 'Quantity', 'Quantity_y': 'Sold 7D'}).fillna(0)
-
 master_df = pd.merge(master_df, last_install_df, on='Model Number', how='left').fillna({'Last Install Date': 'No Record'})
 master_df = pd.merge(master_df, usage_trend_baseline[['Model Number', 'Historical Weekly Baseline']], on='Model Number', how='left').fillna(0)
-
-# Sort by active 30-day catalog distribution and restrict to top 12 primary units
 master_df = master_df.sort_values(by='Sold 30D', ascending=False).head(12).reset_index(drop=True)
 
-# Compute Modulated Weighted Velocity Averages
 w_7d, w_30d, w_all = weight_7d / 100.0, weight_30d / 100.0, weight_all / 100.0
 master_df['Weighted Weekly Avg'] = (master_df['7D Weekly Avg'] * w_7d) + (master_df['30D Weekly Avg'] * w_30d) + (master_df['All Time Weekly Avg'] * w_all)
 
 total_weighted_avg = master_df['Weighted Weekly Avg'].sum() if master_df['Weighted Weekly Avg'].sum() > 0 else 1
 master_df['Share %'] = master_df['Weighted Weekly Avg'] / total_weighted_avg
-
 master_df = pd.merge(master_df, reserved_stock, on='Model Number', how='left').fillna(0)
 master_df['In Shop'] = master_df['Model Number'].map(inventory_lookup).fillna(0).astype(int)
 master_df['Bulk Price'] = master_df['Model Number'].map(bulk_lookup).fillna(0)
 
-# Velocity Momentum Evaluator Logic Array
 def assign_velocity_trend(row):
     current = row['7D Weekly Avg']
     prior = row['Historical Weekly Baseline']
@@ -182,7 +172,6 @@ def assign_velocity_trend(row):
 
 master_df['Velocity Trend Indicator'] = master_df.apply(assign_velocity_trend, axis=1)
 
-# Linear Allocation Capital Solver Logic block
 if target_mode == "💰 Budget Goal ($)":
     best_capacity = 0
     closest_diff = float('inf')
@@ -200,14 +189,31 @@ else:
     master_df['Target Capacity'] = (master_df['Share %'] * target_total_inventory).round().astype(int)
 
 # --- 3. UI PLATFORM TAB CODES ---
-tab1, tab2, tab3 = st.tabs(["📋 Interactive Order Sheet", "📊 Forecasting Breakdown", "🧪 Feature Sandbox"])
+tab1, tab2, tab3, tab4 = st.tabs(["📋 Standard Order Sheet", "📊 Forecasting Breakdown", "🧪 Feature Sandbox", "🌪️ Volatility-Adjusted Order Sheet"])
 
 # ----------------------------------------------------
-# TAB 1: OPERATIONAL ORDER GENERATOR
+# TAB 1: STANDARD OPERATIONAL ORDER GENERATOR
 # ----------------------------------------------------
 with tab1:
     st.subheader("Master Weekly Bulk Order Sheet")
     st.write("**Click directly on any number in the `ORDER QTY` column** to manually override configuration targets.")
+
+    # --- PRE-CALCULATE VOLATILITY FOR ORDER CONTEXT ---
+    volatility_lookup = {}
+    if not df_installed.empty and 'Install Date' in df_installed.columns:
+        df_vol = df_installed.dropna(subset=['Install Date']).copy()
+        df_vol['Week_Period'] = df_vol['Install Date'].dt.to_period('W')
+        weekly_model_sales = df_vol.groupby(['Model Number', 'Week_Period'])['Quantity'].sum().reset_index()
+        volatility_stats = weekly_model_sales.groupby('Model Number')['Quantity'].agg(['mean', 'std']).reset_index()
+        volatility_stats['std'] = volatility_stats['std'].fillna(0)
+        
+        for _, r in volatility_stats.iterrows():
+            avg_wk = r['mean']
+            cv = r['std'] / avg_wk if avg_wk > 0 else 0
+            if cv >= 1.0: vol_str = "🔴 HIGH"
+            elif cv >= 0.5: vol_str = "🟡 MODERATE"
+            else: vol_str = "🟢 LOW (Stable)"
+            volatility_lookup[r['Model Number']] = vol_str
 
     order_sheet_data = []
     for index, row in master_df.iterrows():
@@ -223,16 +229,18 @@ with tab1:
         effective_inv = current_inv - reserved
         order_amt = max(0, target_inv - effective_inv)
         status = "🟢 ORDER" if order_amt > 0 else "✔️ OK"
+        vol_status = volatility_lookup.get(model, "⚪ N/A")
         
         order_sheet_data.append({
-            "STATUS": status, "MODEL": model, "LAST INSTALL DATE": row['Last Install Date'],
+            "STATUS": status, "MODEL": model, "DEMAND VOLATILITY": vol_status, 
+            "LAST INSTALL DATE": row['Last Install Date'],
             "WAREHOUSE STOCK": current_inv, "PENDING INSTALLS": reserved, "ORDER QTY": order_amt, 
             "INSTALLED/SOLD IN PAST 7 DAYS": int(row['Sold 7D']), "SOLD IN LAST 30 DAYS": int(row['Sold 30D']),
             "BULK PRICE ONLINE": bulk_price, "NXLVL STORE PRICE": store_price, "SAVINGS": savings
         })
 
     order_df = pd.DataFrame(order_sheet_data).sort_values(by="SOLD IN LAST 30 DAYS", ascending=False)
-    reordered_cols = ["STATUS", "MODEL", "LAST INSTALL DATE", "WAREHOUSE STOCK", "PENDING INSTALLS", "ORDER QTY", "INSTALLED/SOLD IN PAST 7 DAYS", "SOLD IN LAST 30 DAYS", "BULK PRICE ONLINE", "NXLVL STORE PRICE", "SAVINGS"]
+    reordered_cols = ["STATUS", "MODEL", "DEMAND VOLATILITY", "LAST INSTALL DATE", "WAREHOUSE STOCK", "PENDING INSTALLS", "ORDER QTY", "INSTALLED/SOLD IN PAST 7 DAYS", "SOLD IN LAST 30 DAYS", "BULK PRICE ONLINE", "NXLVL STORE PRICE", "SAVINGS"]
     order_df = order_df[reordered_cols]
 
     def highlight_ordered_models(df_input):
@@ -249,11 +257,10 @@ with tab1:
             "NXLVL STORE PRICE": st.column_config.NumberColumn(format="$%.2f"),
             "SAVINGS": st.column_config.NumberColumn(format="$%.2f"),
         },
-        disabled=["STATUS", "MODEL", "LAST INSTALL DATE", "WAREHOUSE STOCK", "PENDING INSTALLS", "INSTALLED/SOLD IN PAST 7 DAYS", "SOLD IN LAST 30 DAYS", "BULK PRICE ONLINE", "NXLVL STORE PRICE", "SAVINGS"],
+        disabled=["STATUS", "MODEL", "DEMAND VOLATILITY", "LAST INSTALL DATE", "WAREHOUSE STOCK", "PENDING INSTALLS", "INSTALLED/SOLD IN PAST 7 DAYS", "SOLD IN LAST 30 DAYS", "BULK PRICE ONLINE", "NXLVL STORE PRICE", "SAVINGS"],
         hide_index=True, use_container_width=True
     )
 
-    # Financial Totaling Block Calculations
     total_units = edited_df["ORDER QTY"].sum()
     base_bulk_cost = (edited_df["ORDER QTY"] * edited_df["BULK PRICE ONLINE"]).sum()
     bulk_tax = base_bulk_cost * TAX_RATE
@@ -492,7 +499,7 @@ with tab3:
     st.dataframe(sales_table_df, hide_index=True, use_container_width=True)
     st.write("---")
 
-    # SANDBOX FEATURE 5: DEAD STOCK DETECTOR WITH HORIZON INPUT CONTROLLER
+    # SANDBOX FEATURE 5: DEAD STOCK DETECTOR
     st.subheader("🕷️ 5. Dead Stock Finder (Inactivity Horizon Threshold Controller)")
     dead_stock_days_horizon = st.number_input("Enter Custom Inactivity Horizon Window Threshold (Days):", min_value=1, max_value=180, value=45, step=1)
     
@@ -861,21 +868,15 @@ with tab3:
     st.dataframe(turnover_df.style.format({"CALCULATED TURNOVER RATIO": "{:.2f}"}), hide_index=True, use_container_width=True)
     st.write("---")
 
-    # NEW SANDBOX FEATURE 19: MOST VOLATILE DEMAND INDICATOR
+    # SANDBOX FEATURE 19: MOST VOLATILE DEMAND INDICATOR
     st.subheader("📈 19. Most Volatile Demand Indicator (Weekly Chaos Score)")
     st.write("Calculates the standard deviation of weekly sales to flag models with chaotic, unpredictable demand that require larger safety stock cushions:")
     
     if not df_installed.empty and 'Install Date' in df_installed.columns:
         df_vol = df_installed.dropna(subset=['Install Date']).copy()
         df_vol['Week_Period'] = df_vol['Install Date'].dt.to_period('W')
-        
-        # Aggregate quantity per week per model
         weekly_model_sales = df_vol.groupby(['Model Number', 'Week_Period'])['Quantity'].sum().reset_index()
-        
-        # Calculate mean and standard deviation of those weekly sales
         volatility_stats = weekly_model_sales.groupby('Model Number')['Quantity'].agg(['mean', 'std']).reset_index()
-        
-        # Fill NaNs in std (happens if only 1 week of sales exists) with 0
         volatility_stats['std'] = volatility_stats['std'].fillna(0)
         
         volatility_data = []
@@ -884,7 +885,6 @@ with tab3:
             avg_wk = r['mean']
             std_wk = r['std']
             
-            # Filter to active models in master_df to keep it relevant
             if model in master_df['Model Number'].values:
                 cv = std_wk / avg_wk if avg_wk > 0 else 0
                 
@@ -898,7 +898,7 @@ with tab3:
                     status = "🟢 LOW VOLATILITY (Stable)"
                     rec = "Predictable demand. Safe to lean out inventory."
                     
-                if avg_wk > 0 and cv > 0: # Exclude dead models or single-week wonders
+                if avg_wk > 0 and cv > 0:
                     volatility_data.append({
                         "MODEL NUMBER": model,
                         "AVG WEEKLY VOLUME": avg_wk,
@@ -926,3 +926,146 @@ with tab3:
     else:
         st.info("Insufficient historical date metrics available.")
     st.write("---")
+
+# ----------------------------------------------------
+# TAB 4: VOLATILITY-ADJUSTED ORDER GENERATOR
+# ----------------------------------------------------
+with tab4:
+    st.subheader("🌪️ Volatility-Adjusted Bulk Order Sheet")
+    st.write("This automated sheet mathematically intercepts the Standard Order logic and directly adds physical safety buffers (+1 or +2 Units) to your calculated target capacities for models that suffer from highly unpredictable demand spikes.")
+
+    # --- PRE-CALCULATE VOLATILITY FOR TAB 4 ---
+    volatility_lookup_tab4 = {}
+    buffer_lookup_tab4 = {}
+    if not df_installed.empty and 'Install Date' in df_installed.columns:
+        df_vol = df_installed.dropna(subset=['Install Date']).copy()
+        df_vol['Week_Period'] = df_vol['Install Date'].dt.to_period('W')
+        weekly_model_sales = df_vol.groupby(['Model Number', 'Week_Period'])['Quantity'].sum().reset_index()
+        volatility_stats = weekly_model_sales.groupby('Model Number')['Quantity'].agg(['mean', 'std']).reset_index()
+        volatility_stats['std'] = volatility_stats['std'].fillna(0)
+        
+        for _, r in volatility_stats.iterrows():
+            avg_wk = r['mean']
+            cv = r['std'] / avg_wk if avg_wk > 0 else 0
+            
+            if cv >= 1.0: 
+                vol_str = "🔴 HIGH"
+                buffer = 2
+            elif cv >= 0.5: 
+                vol_str = "🟡 MODERATE"
+                buffer = 1
+            else: 
+                vol_str = "🟢 LOW (Stable)"
+                buffer = 0
+                
+            volatility_lookup_tab4[r['Model Number']] = vol_str
+            buffer_lookup_tab4[r['Model Number']] = buffer
+
+    order_sheet_data_4 = []
+    for index, row in master_df.iterrows():
+        model = row['Model Number']
+        base_target_inv = row['Target Capacity']
+        reserved = int(row['Reserved'])
+        current_inv = int(row['In Shop'])
+        
+        # Retrieve Volatility and Buffer
+        vol_status = volatility_lookup_tab4.get(model, "⚪ N/A")
+        vol_buffer = buffer_lookup_tab4.get(model, 0)
+        
+        # Inject the mathematical safety buffer into the target logic
+        adjusted_target_inv = base_target_inv + vol_buffer
+        
+        bulk_price = bulk_lookup.get(model, 0.0)
+        store_price = store_lookup.get(model, 0.0)
+        savings = max(0, store_price - bulk_price)
+        
+        effective_inv = current_inv - reserved
+        order_amt = max(0, adjusted_target_inv - effective_inv)
+        
+        status = "🟢 ORDER" if order_amt > 0 else "✔️ OK"
+        buffer_str = f"+{vol_buffer} Units" if vol_buffer > 0 else "None Needed"
+        
+        order_sheet_data_4.append({
+            "STATUS": status, "MODEL": model, "DEMAND VOLATILITY": vol_status,
+            "SAFETY BUFFER ADDED": buffer_str, 
+            "LAST INSTALL DATE": row['Last Install Date'],
+            "WAREHOUSE STOCK": current_inv, "PENDING INSTALLS": reserved, "ADJUSTED ORDER QTY": order_amt, 
+            "INSTALLED/SOLD IN PAST 7 DAYS": int(row['Sold 7D']), "SOLD IN LAST 30 DAYS": int(row['Sold 30D']),
+            "BULK PRICE ONLINE": bulk_price, "NXLVL STORE PRICE": store_price, "SAVINGS": savings
+        })
+
+    order_df_4 = pd.DataFrame(order_sheet_data_4).sort_values(by="SOLD IN LAST 30 DAYS", ascending=False)
+    reordered_cols_4 = ["STATUS", "MODEL", "DEMAND VOLATILITY", "SAFETY BUFFER ADDED", "LAST INSTALL DATE", "WAREHOUSE STOCK", "PENDING INSTALLS", "ADJUSTED ORDER QTY", "INSTALLED/SOLD IN PAST 7 DAYS", "SOLD IN LAST 30 DAYS", "BULK PRICE ONLINE", "NXLVL STORE PRICE", "SAVINGS"]
+    order_df_4 = order_df_4[reordered_cols_4]
+
+    def highlight_ordered_models_4(df_input):
+        style_df = pd.DataFrame('', index=df_input.index, columns=df_input.columns)
+        mask = df_input['ADJUSTED ORDER QTY'] > 0
+        style_df.loc[mask, 'MODEL'] = 'background-color: #d4edda; font-weight: bold; color: #155724;'
+        return style_df
+
+    edited_df_4 = st.data_editor(
+        order_df_4.style.apply(highlight_ordered_models_4, axis=None),
+        column_config={
+            "ADJUSTED ORDER QTY": st.column_config.NumberColumn("ADJUSTED ORDER QTY ✏️", min_value=0, step=1),
+            "BULK PRICE ONLINE": st.column_config.NumberColumn(format="$%.2f"),
+            "NXLVL STORE PRICE": st.column_config.NumberColumn(format="$%.2f"),
+            "SAVINGS": st.column_config.NumberColumn(format="$%.2f"),
+        },
+        disabled=["STATUS", "MODEL", "DEMAND VOLATILITY", "SAFETY BUFFER ADDED", "LAST INSTALL DATE", "WAREHOUSE STOCK", "PENDING INSTALLS", "INSTALLED/SOLD IN PAST 7 DAYS", "SOLD IN LAST 30 DAYS", "BULK PRICE ONLINE", "NXLVL STORE PRICE", "SAVINGS"],
+        hide_index=True, use_container_width=True
+    )
+
+    total_units_4 = edited_df_4["ADJUSTED ORDER QTY"].sum()
+    base_bulk_cost_4 = (edited_df_4["ADJUSTED ORDER QTY"] * edited_df_4["BULK PRICE ONLINE"]).sum()
+    bulk_tax_4 = base_bulk_cost_4 * TAX_RATE
+    total_bulk_cost_with_tax_4 = base_bulk_cost_4 + bulk_tax_4
+    
+    base_store_cost_4 = (edited_df_4["ADJUSTED ORDER QTY"] * edited_df_4["NXLVL STORE PRICE"]).sum()
+    store_tax_4 = base_store_cost_4 * TAX_RATE
+    total_store_cost_with_tax_4 = base_store_cost_4 + store_tax_4
+    net_savings_4 = total_store_cost_with_tax_4 - total_bulk_cost_with_tax_4
+
+    st.subheader("Volatility-Adjusted Financial Summary")
+    col_bulk_4, col_store_4, col_summary_4 = st.columns(3)
+    with col_bulk_4:
+        st.markdown("### 🏪 Bulk Ordering Price")
+        st.write(f"**Subtotal:** ${base_bulk_cost_4:,.2f}")
+        st.write(f"**Estimated Tax ({tax_input}%):** ${bulk_tax_4:,.2f}")
+        st.markdown(f"**TOTAL BULK COST:** `${total_bulk_cost_with_tax_4:,.2f}`")
+    with col_store_4:
+        st.markdown("### 🏢 Regular Store Price")
+        st.write(f"**Subtotal:** ${base_store_cost_4:,.2f}")
+        st.write(f"**Estimated Tax ({tax_input}%):** ${store_tax_4:,.2f}")
+        st.markdown(f"**TOTAL STORE COST:** `${total_store_cost_with_tax_4:,.2f}`")
+    with col_summary_4:
+        st.markdown("### 📈 Order Volume Metrics")
+        st.metric("Total Heaters Selected", int(total_units_4))
+        st.metric("Net Financial Savings", f"${max(0.0, net_savings_4):,.2f}")
+
+    st.divider()
+
+    st.subheader("✉️ Copy & Paste Rich Text Email Draft")
+    quick_copy_base_4 = edited_df_4[edited_df_4["ADJUSTED ORDER QTY"] > 0].copy()
+    if not quick_copy_base_4.empty:
+        table_markdown_rows_4 = ""
+        for _, r in quick_copy_base_4.iterrows():
+            table_markdown_rows_4 += f"| {r['MODEL']} | {int(r['ADJUSTED ORDER QTY'])} | ${r['BULK PRICE ONLINE']:,.2f} | ${r['NXLVL STORE PRICE']:,.2f} |\n"
+
+        email_rich_template_4 = f"""
+Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!<br><br>
+Please send payment request to my cell. 804-536-4748<br><br>
+
+| MODEL | ORDER QTY | BULK PRICE | STORE PRICE |
+| :--- | :--- | :--- | :--- |
+{table_markdown_rows_4}
+
+<br>
+<b>Total Quantity Ordered:</b> {int(total_units_4)} unit(s)<br>
+<b>Subtotal:</b> ${base_bulk_cost_4:,.2f}<br>
+<b>Estimated Tax ({tax_input}%):</b> ${bulk_tax_4:,.2f}<br>
+<b>TOTAL BULK COST:</b> ${total_bulk_cost_with_tax_4:,.2f}
+"""
+        st.markdown(f'<div style="background-color: #fcfcfc; padding: 25px; border-radius: 8px; border: 1px solid #eaeaea; line-height: 1.6; color: #000000;">\n\n{email_rich_template_4}\n\n</div>', unsafe_allow_html=True)
+    else:
+        st.info("No items currently marked for order matching the current configuration.")
