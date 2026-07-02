@@ -688,7 +688,7 @@ with tab3:
         st.info("Insufficient job history to process interval scoring models.")
     st.write("---")
 
-    # NEW SANDBOX FEATURE 10: LOWE'S RETURN WINDOW COUNTDOWN
+    # SANDBOX FEATURE 10: LOWE'S RETURN WINDOW COUNTDOWN
     st.subheader("📦 10. Lowe's Return Window Countdown (90-Day Dead Weight Alert)")
     st.write("Track stagnant equipment models currently on your shelves that are approaching Lowe's 90-day return policy threshold:")
     
@@ -730,7 +730,7 @@ with tab3:
         st.info("Excellent footprint logistics! No physical rack stock matches dead return window parameter lookbacks.")
     st.write("---")
 
-    # NEW SANDBOX FEATURE 11: 4-WEEK CASH OUTFLOW RUNWAY PROJECTION
+    # SANDBOX FEATURE 11: 4-WEEK CASH OUTFLOW RUNWAY PROJECTION
     st.subheader("💰 11. 4-Week Cash Outflow Runway Projection")
     st.write("Forward-looking rolling projection of expected capital required week-over-week to replenish inventory velocity and preserve target capacities:")
     
@@ -756,4 +756,150 @@ with tab3:
         
     runway_df = pd.DataFrame(runway_rows)
     st.dataframe(runway_df.style.format({"ESTIMATED REPLENISHMENT CAPITAL REQUIREMENT (WITH TAX)": "${:,.2f}"}), hide_index=True, use_container_width=True)
+    st.write("---")
+
+    # NEW SANDBOX FEATURE 12: VISUAL WAREHOUSE CAPACITY BAR
+    st.subheader("📏 12. Visual Warehouse Capacity Status")
+    st.write("Quick visual check of current floor space consumed vs. max target allowances.")
+    total_current_inv = master_df['In Shop'].sum()
+    capacity_limit = target_total_inventory if target_mode == "📦 Warehouse Capacity (Units)" else master_df['Target Capacity'].sum()
+    
+    if capacity_limit > 0:
+        fill_pct = min(total_current_inv / capacity_limit, 1.0)
+        st.progress(fill_pct)
+        st.write(f"**Current Physical Capacity:** {int(total_current_inv)} Units on Shelf / {int(capacity_limit)} Target Limit ({fill_pct*100:.1f}% Full)")
+        if fill_pct >= 0.95:
+            st.error("⚠️ Approaching Maximum Floor Capacity Limit!")
+    else:
+        st.info("Capacity targets are currently set to zero.")
+    st.write("---")
+
+    # NEW SANDBOX FEATURE 13: NEXT 30-DAY BUDGET PROJECTION
+    st.subheader("📅 13. Next 30-Day Budget Projection")
+    st.write("Calculate exactly how much working capital will be tied up over the next rolling 30-day window based on standard historical momentum:")
+    
+    budget_data = []
+    for _, r in master_df.iterrows():
+        monthly_demand = r['Weighted Weekly Avg'] * 4.0 # 4-week approximation
+        est_cost = monthly_demand * bulk_lookup.get(r['Model Number'], 0.0) * (1 + TAX_RATE)
+        
+        budget_data.append({
+            "MODEL NUMBER": r['Model Number'],
+            "PROJECTED 30-DAY DEMAND (UNITS)": int(round(monthly_demand)),
+            "ESTIMATED 30-DAY PURCHASING COST (w/ TAX)": est_cost
+        })
+        
+    budget_df = pd.DataFrame(budget_data)
+    st.dataframe(budget_df.style.format({"ESTIMATED 30-DAY PURCHASING COST (w/ TAX)": "${:,.2f}"}), hide_index=True, use_container_width=True)
+    st.metric("Total Estimated 30-Day Capital Drain", f"${budget_df['ESTIMATED 30-DAY PURCHASING COST (w/ TAX)'].sum():,.2f}")
+    st.write("---")
+
+    # NEW SANDBOX FEATURE 14: GHOST STOCK / AUDIT TRIGGER
+    st.subheader("👻 14. 'Ghost Stock' Physical Audit Trigger")
+    st.write("Automatically flags units that are taking up warehouse space but have recorded absolute zero movement in the past month (Potential physical count errors):")
+    
+    ghost_df = master_df[(master_df['In Shop'] > 0) & (master_df['Sold 30D'] == 0)].copy()
+    if not ghost_df.empty:
+        st.dataframe(ghost_df[['Model Number', 'In Shop', 'Last Install Date']].rename(columns={"In Shop": "UNITS APPARENTLY ON RACK", "Last Install Date": "LAST TIME INVOICED"}), hide_index=True, use_container_width=True)
+        st.warning("Action Required: A manual warehouse sweep is recommended to verify these units actually exist.")
+    else:
+        st.success("Clean Data! No dormant 'Ghost Stock' anomalies detected between counting apps and sales history.")
+    st.write("---")
+
+    # NEW SANDBOX FEATURE 15: HISTORICAL SINGLE-DAY MAX
+    st.subheader("🏔️ 15. Historical Single-Day Max (Worst-Case Buffer)")
+    st.write("Finds the absolute highest volume of a single model installed in a single day to establish your non-negotiable minimum safety floor:")
+    
+    if not df_installed.empty:
+        daily_install_totals = df_installed.groupby(['Model Number', 'Install Date'])['Quantity'].sum().reset_index()
+        max_single_day = daily_install_totals.groupby('Model Number')['Quantity'].max().reset_index()
+        max_single_day.columns = ["MODEL NUMBER", "RECORD MAX INSTALLED IN A SINGLE DAY"]
+        
+        # Merge against current stock to see if you are prepared for a worst-case day today
+        max_single_day['CURRENT STOCK ON HAND'] = max_single_day['MODEL NUMBER'].map(inventory_lookup).fillna(0).astype(int)
+        max_single_day['PREPARED FOR WORST DAY?'] = max_single_day.apply(lambda x: "🟢 YES" if x['CURRENT STOCK ON HAND'] >= x['RECORD MAX INSTALLED IN A SINGLE DAY'] else "🔴 NO", axis=1)
+        
+        # Filter to only show relevant models
+        valid_models = master_df['Model Number'].tolist()
+        max_single_day = max_single_day[max_single_day['MODEL NUMBER'].isin(valid_models)].sort_values(by="RECORD MAX INSTALLED IN A SINGLE DAY", ascending=False)
+        
+        st.dataframe(max_single_day, hide_index=True, use_container_width=True)
+    else:
+        st.info("Insufficient data to process single-day maximums.")
+    st.write("---")
+
+    # NEW SANDBOX FEATURE 16: DORMANT / OVERDUE PIPELINE ALERTS
+    st.subheader("⏰ 16. Dormant / Overdue Pipeline Alerts")
+    st.write("Instantly tracks 'Estimate Accepted' records where the scheduled installation date has already passed. These jobs may be tying up reserved safety stock unnecessarily:")
+    
+    if not df_estimates.empty:
+        today_dt = pd.to_datetime(datetime.date.today())
+        overdue_df = df_estimates[df_estimates['Install Date'] < today_dt].copy()
+        
+        if not overdue_df.empty:
+            overdue_df['DAYS PAST DUE'] = (today_dt - overdue_df['Install Date']).dt.days
+            display_overdue = overdue_df[['Model Number', 'Quantity', 'Scheduled/ Completed Install Date', 'DAYS PAST DUE']].sort_values('DAYS PAST DUE', ascending=False)
+            st.dataframe(display_overdue, hide_index=True, use_container_width=True)
+            st.warning("Action Required: Clear or update these tickets on the Google Sheet to un-reserve this tied-up capital.")
+        else:
+            st.success("Flawless execution. No past-due estimates are currently tying up warehouse reserves.")
+    else:
+        st.success("No accepted estimates on file.")
+    st.write("---")
+
+    # NEW SANDBOX FEATURE 17: MONDAY "WEEKEND BACKLOG" SPIKE ANALYSIS
+    st.subheader("📊 17. Monday 'Weekend Backlog' Spike Analysis")
+    st.write("Mathematically verify if broken weekend heaters cause a massive, disproportionate inventory strain on Monday mornings:")
+    
+    if not df_installed.empty:
+        df_installed['Weekday_Name'] = df_installed['Install Date'].dt.day_name()
+        df_installed['Weekday_Index'] = df_installed['Install Date'].dt.weekday
+        
+        # Remove Sundays from calculations as they are blackout dates
+        weekday_stats = df_installed[df_installed['Weekday_Index'] != 6].groupby(['Weekday_Name', 'Weekday_Index'])['Quantity'].sum().reset_index()
+        weekday_stats = weekday_stats.sort_values(by="Weekday_Index", ascending=True)
+        
+        total_vol = weekday_stats['Quantity'].sum()
+        weekday_stats['SHARE OF TOTAL WEEKLY LOAD'] = (weekday_stats['Quantity'] / total_vol) * 100
+        
+        # Identify if Monday is the highest
+        monday_vol = weekday_stats[weekday_stats['Weekday_Name'] == 'Monday']['Quantity'].sum()
+        other_days_avg = weekday_stats[weekday_stats['Weekday_Name'] != 'Monday']['Quantity'].mean()
+        
+        if monday_vol > other_days_avg * 1.2:
+            st.error(f"⚠️ Heavy Monday Backlog Confirmed. Monday install volumes are significantly higher than the mid-week average.")
+        else:
+            st.success("Normal Distribution. Mondays are relatively consistent with the rest of the operational week.")
+            
+        st.dataframe(weekday_stats[['Weekday_Name', 'Quantity', 'SHARE OF TOTAL WEEKLY LOAD']].style.format({"SHARE OF TOTAL WEEKLY LOAD": "{:.1f}%"}), hide_index=True, use_container_width=True)
+    else:
+        st.info("Insufficient historical data to process daily volume loads.")
+    st.write("---")
+
+    # NEW SANDBOX FEATURE 18: INVENTORY TURNOVER RATIO
+    st.subheader("🔄 18. Inventory Turnover Ratio (30-Day Flip)")
+    st.write("Calculates how many times an entire specific rack of water heaters completely 'flips' or replaces itself in a month (Higher score equals better cash flow):")
+    
+    turnover_data = []
+    for _, r in master_df.iterrows():
+        sold_30 = int(r['Sold 30D'])
+        in_shop = int(r['In Shop'])
+        ratio = sold_30 / in_shop if in_shop > 0 else 0
+        
+        if ratio >= 2.0: health = "🔥 EXCELLENT (High Flow)"
+        elif ratio >= 1.0: health = "🟢 HEALTHY (1-to-1 flip)"
+        elif in_shop == 0 and sold_30 > 0: health = "⚠️ STOCKOUT RISK"
+        elif in_shop > 0 and sold_30 == 0: health = "🕷️ DEAD WEIGHT"
+        else: health = "🟡 SLOW MOVING"
+            
+        turnover_data.append({
+            "MODEL NUMBER": r['Model Number'],
+            "UNITS SOLD (LAST 30 DAYS)": sold_30,
+            "UNITS CURRENTLY SITTING IN WAREHOUSE": in_shop,
+            "CALCULATED TURNOVER RATIO": ratio,
+            "CASH FLOW HEALTH STATUS": health
+        })
+        
+    turnover_df = pd.DataFrame(turnover_data).sort_values(by="CALCULATED TURNOVER RATIO", ascending=False)
+    st.dataframe(turnover_df.style.format({"CALCULATED TURNOVER RATIO": "{:.2f}"}), hide_index=True, use_container_width=True)
     st.write("---")
