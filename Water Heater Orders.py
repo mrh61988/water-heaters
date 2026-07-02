@@ -145,7 +145,7 @@ usage_7d['7D Weekly Avg'] = (usage_7d['Quantity'] / op_days_7d) * 6
 usage_trend_baseline = df_installed[(df_installed['Install Date'] >= date_21_days_ago) & (df_installed['Install Date'] <= date_14_days_ago)].groupby('Model Number')['Quantity'].sum().reset_index()
 usage_trend_baseline['Historical Weekly Baseline'] = (usage_trend_baseline['Quantity'] / op_days_trend_window) * 6
 
-# Assemble Base Dataset Frame (WITH KEY ERROR FIX)
+# Assemble Base Dataset Frame
 master_df = all_time[['Model Number', 'Quantity', 'All Time Weekly Avg']]
 
 master_df = pd.merge(master_df, usage_30d, on='Model Number', how='left')
@@ -290,7 +290,6 @@ with tab1:
         for _, r in quick_copy_base.iterrows():
             table_markdown_rows += f"| {r['MODEL']} | {int(r['ORDER QTY'])} | ${r['BULK PRICE ONLINE']:,.2f} | ${r['NXLVL STORE PRICE']:,.2f} |\n"
 
-        # Explicitly controlling the HTML/Markdown flow to strictly stack headers, ensure black text, and use HTML bold tags
         email_rich_template = f"""
 Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!<br><br>
 Please send payment request to my cell. 804-536-4748<br><br>
@@ -315,7 +314,6 @@ Please send payment request to my cell. 804-536-4748<br><br>
 with tab2:
     st.header("📈 Inventory Velocity & Extended Forecasting Engine")
     
-    # 1. Standard Calculations Dataframe Table Output
     st.subheader("Core Inventory Allocation Matrix")
     st.dataframe(master_df[['Model Number', 'Last Install Date', 'Weighted Weekly Avg', 'Share %', 'Velocity Trend Indicator', 'Target Capacity', 'In Shop', 'Reserved']], use_container_width=True, hide_index=True)
     st.write("---")
@@ -323,7 +321,6 @@ with tab2:
     col_left, col_right = st.columns([1, 1])
     
     with col_left:
-        # 2. "Estimate Accepted" Stagnant Bottleneck Tracker Module
         st.subheader("⏳ 'Estimate Accepted' Pipeline Bottleneck Tracker")
         st.write("Chronological tracking of pending pipeline allocations currently consuming warehouse safety stock:")
         if not df_estimates.empty:
@@ -338,11 +335,9 @@ with tab2:
             st.info("Excellent! No pipeline backup records or accepted estimates currently stalled in logistics records.")
 
     with col_right:
-        # 3. Catalog Market Volume Saturation Pie Chart Visualizer Module
         st.subheader("🍕 Catalog Saturation Market Share Volume")
         st.write("Percentage share breakdown of top catalog items relative to comprehensive service footprints:")
         
-        # Generates a clean interactive pie chart using Plotly Express
         pie_data = master_df[['Model Number', 'Quantity']].copy()
         if not pie_data.empty and pie_data['Quantity'].sum() > 0:
             fig = px.pie(pie_data, values='Quantity', names='Model Number', hole=0.3, 
@@ -355,7 +350,6 @@ with tab2:
 
     st.write("---")
     
-    # 4. Historical Matrix Grid Mapping Module (Pivot Presentation Breakdown)
     st.subheader("📅 Long-Horizon Historical Monthly Installation Matrix")
     st.write("Year-over-Year inventory consumption profiles tracking seasonal fluctuations and operational scaling metrics:")
     if not df_installed.empty:
@@ -363,7 +357,6 @@ with tab2:
         df_installed['Month'] = df_installed['Install Date'].dt.strftime('%B')
         df_installed['Month_Num'] = df_installed['Install Date'].dt.month.fillna(0).astype(int)
         
-        # Build strict model boundary isolation filter rules
         valid_models = master_df['Model Number'].tolist()
         matrix_filtered = df_installed[df_installed['Model Number'].isin(valid_models)].copy()
         
@@ -375,35 +368,21 @@ with tab2:
                 aggfunc='sum'
             ).fillna(0).astype(int)
             
-            # Formatting layout configurations to simplify raw MultiIndex outputs
             pivot_matrix.columns = [f"{yr} - {m_name}" for yr, m_num, m_name in pivot_matrix.columns]
-            
-            # --- Add a Total row calculating the sum of all models per month ---
             pivot_matrix.loc['TOTAL (ALL MODELS)'] = pivot_matrix.sum()
             
             st.dataframe(pivot_matrix, use_container_width=True)
             
-            # --- 5. Top 5 Models by Month Table ---
             st.write("---")
             st.subheader("🏆 Top 5 Models by Month")
             st.write("Monthly breakdown of the highest volume models to quickly identify shifting seasonal popularity.")
             
-            # Group data by Month and Model, sum quantities
             monthly_models = matrix_filtered.groupby(['Year', 'Month_Num', 'Month', 'Model Number'])['Quantity'].sum().reset_index()
-            
-            # Sort by Month chronologically, then by Quantity descending
             monthly_models = monthly_models.sort_values(by=['Year', 'Month_Num', 'Quantity'], ascending=[True, True, False])
-            
-            # Rank them per month
             monthly_models['Rank'] = monthly_models.groupby(['Year', 'Month_Num', 'Month']).cumcount() + 1
-            
-            # Filter to keep only the top 5
             top5_monthly = monthly_models[monthly_models['Rank'] <= 5].copy()
-            
-            # Format the output string for the cells (e.g., "Model_Name (15)")
             top5_monthly['Display'] = top5_monthly['Model Number'] + " (" + top5_monthly['Quantity'].astype(int).astype(str) + ")"
             
-            # Pivot table to make columns the Year-Months and rows the Ranks 1-5
             top5_pivot = top5_monthly.pivot_table(
                 index='Rank',
                 columns=['Year', 'Month_Num', 'Month'],
@@ -411,7 +390,6 @@ with tab2:
                 aggfunc='first'
             ).fillna('-')
             
-            # Make columns match the previous matrix table
             top5_pivot.columns = [f"{yr} - {m_name}" for yr, m_num, m_name in top5_pivot.columns]
             top5_pivot.index.name = "Monthly Rank"
             
@@ -432,7 +410,6 @@ with tab3:
 
     # SANDBOX FEATURE 1: DIRECT VENDOR PORTAL EMAIL ENGINE
     st.subheader("📬 1. Direct Vendor Portal Email Routing Engine")
-    
     default_to = '"Frey, Zac" <zac.frey@lowes.com>, "Drury, Ricky" <ricky.drury@store.lowes.com>, "Sherman, Kenneth" <kenneth.sherman@store.lowes.com>, "Hawkins, Danny" <danny.a.hawkins@store.lowes.com>'
     default_cc = 'Jarren Heward <jarren@nex-lvl.com>, Dominic Cruz <dominic@nex-lvl.com>, Brenton Heward <brenton@nex-lvl.com>'
     default_sub = f"Lowes Water Heater Order: Brincor/NexLvl {datetime.date.today().strftime('%m/%d/%Y')}"
@@ -445,8 +422,6 @@ with tab3:
     quick_copy_sandbox = edited_df[edited_df["ORDER QTY"] > 0].copy()
 
     if not quick_copy_sandbox.empty:
-        
-        # EXACT FORMATTING MATCH to Tab 1 using plain text equivalent layout for URL parameters
         plain_text_body = "Please see the water heater order below. Let me know how soon these can be delivered and if you have any questions. Thanks!\n\n"
         plain_text_body += "Please send payment request to my cell. 804-536-4748\n\n"
         plain_text_body += "MODEL | ORDER QTY | BULK PRICE | STORE PRICE\n"
@@ -465,7 +440,6 @@ with tab3:
         safe_sub = urllib.parse.quote(email_subject)
         safe_body = urllib.parse.quote(plain_text_body)
         
-        # 🔗 Use Google Web Compose URL to explicitly force a Gmail Draft
         gmail_url = f"https://mail.google.com/mail/?view=cm&fs=1&to={safe_to}&cc={safe_cc}&su={safe_sub}&body={safe_body}"
         
         st.markdown(f'<a href="{gmail_url}" target="_blank" style="text-decoration:none;"><button style="background-color:#db4437; color:white; border:none; padding:12px 24px; border-radius:6px; cursor:pointer; font-weight:bold; font-size:15px;">📧 Create Draft in Gmail</button></a>', unsafe_allow_html=True)
@@ -488,7 +462,6 @@ with tab3:
         shop_stock = int(row['In Shop'])
         reserved = int(row['Reserved'])
         
-        # Integrates structural Sunday/Holiday filters combined with simulated heat adjustments
         daily_velocity = ((row['Weighted Weekly Avg'] / 6.0) * velocity_slider * multiplier_buffer)
         net_stock = shop_stock - reserved
         
@@ -519,16 +492,12 @@ with tab3:
     st.dataframe(sales_table_df, hide_index=True, use_container_width=True)
     st.write("---")
 
-    # UPGRADED SANDBOX FEATURE 5: DEAD STOCK DETECTOR WITH HORIZON INPUT CONTROLLER
+    # SANDBOX FEATURE 5: DEAD STOCK DETECTOR WITH HORIZON INPUT CONTROLLER
     st.subheader("🕷️ 5. Dead Stock Finder (Inactivity Horizon Threshold Controller)")
-    st.write("Trace low-velocity or stagnant warehouse inventory that has recorded zero sales activity across custom lookback parameters:")
-    
     dead_stock_days_horizon = st.number_input("Enter Custom Inactivity Horizon Window Threshold (Days):", min_value=1, max_value=180, value=45, step=1)
     
     horizon_cutoff_date = max_date - pd.Timedelta(days=dead_stock_days_horizon)
     active_sales_in_horizon = df_installed[df_installed['Install Date'] >= horizon_cutoff_date].groupby('Model Number')['Quantity'].sum().to_dict()
-    
-    # Build a quick lookup for last install date across ALL models
     last_install_lookup = last_install_df.set_index('Model Number')['Last Install Date'].to_dict()
 
     dead_stock_list = []
@@ -576,8 +545,6 @@ with tab3:
     base_date = datetime.date.today()
     
     for index, row in master_df.iterrows():
-        
-        # EXCLUSION FIX: Exclude models not installed or sold in the last 30 days
         if int(row['Sold 30D']) <= 0:
             continue
             
@@ -595,7 +562,6 @@ with tab3:
             while sim_stock > 0 and loop_safety < 365:
                 current_projected_date += datetime.timedelta(days=1)
                 
-                # Check calendar deadlines using explicit blackout workday logic rules
                 is_op = True
                 if current_projected_date.weekday() == 6: is_op = False
                 elif current_projected_date.month == 12 and current_projected_date.day == 25: is_op = False
@@ -690,8 +656,6 @@ with tab3:
 
     # SANDBOX FEATURE 10: LOWE'S RETURN WINDOW COUNTDOWN
     st.subheader("📦 10. Lowe's Return Window Countdown (90-Day Dead Weight Alert)")
-    st.write("Track stagnant equipment models currently on your shelves that are approaching Lowe's 90-day return policy threshold:")
-    
     countdown_data = []
     for index, row in master_df.iterrows():
         model = row['Model Number']
@@ -703,7 +667,7 @@ with tab3:
                 last_date_dt = pd.to_datetime(last_date_str)
                 days_stagnant = (max_date - last_date_dt).days
             else:
-                days_stagnant = 65  # Safety baseline calculation assignment
+                days_stagnant = 65
             
             days_to_return = max(0, 90 - days_stagnant)
             if days_to_return <= 15:
@@ -732,17 +696,14 @@ with tab3:
 
     # SANDBOX FEATURE 11: 4-WEEK CASH OUTFLOW RUNWAY PROJECTION
     st.subheader("💰 11. 4-Week Cash Outflow Runway Projection")
-    st.write("Forward-looking rolling projection of expected capital required week-over-week to replenish inventory velocity and preserve target capacities:")
-    
     runway_rows = []
     for week_num in range(1, 5):
         total_projected_units = 0.0
         total_estimated_cost = 0.0
         
         for index, row in master_df.iterrows():
-            # Compiles dynamic adjustments from sandbox velocity and heat-wave sliders
             daily_vel = (row['Weighted Weekly Avg'] / 6.0) * velocity_slider * multiplier_buffer
-            weekly_demand = daily_vel * 6.0  # Normalized standard 6-day work week footprint
+            weekly_demand = daily_vel * 6.0
             bulk_p = bulk_lookup.get(row['Model Number'], 0.0)
             
             total_projected_units += weekly_demand
@@ -758,9 +719,8 @@ with tab3:
     st.dataframe(runway_df.style.format({"ESTIMATED REPLENISHMENT CAPITAL REQUIREMENT (WITH TAX)": "${:,.2f}"}), hide_index=True, use_container_width=True)
     st.write("---")
 
-    # NEW SANDBOX FEATURE 12: VISUAL WAREHOUSE CAPACITY BAR
+    # SANDBOX FEATURE 12: VISUAL WAREHOUSE CAPACITY BAR
     st.subheader("📏 12. Visual Warehouse Capacity Status")
-    st.write("Quick visual check of current floor space consumed vs. max target allowances.")
     total_current_inv = master_df['In Shop'].sum()
     capacity_limit = target_total_inventory if target_mode == "📦 Warehouse Capacity (Units)" else master_df['Target Capacity'].sum()
     
@@ -774,13 +734,11 @@ with tab3:
         st.info("Capacity targets are currently set to zero.")
     st.write("---")
 
-    # NEW SANDBOX FEATURE 13: NEXT 30-DAY BUDGET PROJECTION
+    # SANDBOX FEATURE 13: NEXT 30-DAY BUDGET PROJECTION
     st.subheader("📅 13. Next 30-Day Budget Projection")
-    st.write("Calculate exactly how much working capital will be tied up over the next rolling 30-day window based on standard historical momentum:")
-    
     budget_data = []
     for _, r in master_df.iterrows():
-        monthly_demand = r['Weighted Weekly Avg'] * 4.0 # 4-week approximation
+        monthly_demand = r['Weighted Weekly Avg'] * 4.0
         est_cost = monthly_demand * bulk_lookup.get(r['Model Number'], 0.0) * (1 + TAX_RATE)
         
         budget_data.append({
@@ -794,10 +752,8 @@ with tab3:
     st.metric("Total Estimated 30-Day Capital Drain", f"${budget_df['ESTIMATED 30-DAY PURCHASING COST (w/ TAX)'].sum():,.2f}")
     st.write("---")
 
-    # NEW SANDBOX FEATURE 14: GHOST STOCK / AUDIT TRIGGER
+    # SANDBOX FEATURE 14: GHOST STOCK / AUDIT TRIGGER
     st.subheader("👻 14. 'Ghost Stock' Physical Audit Trigger")
-    st.write("Automatically flags units that are taking up warehouse space but have recorded absolute zero movement in the past month (Potential physical count errors):")
-    
     ghost_df = master_df[(master_df['In Shop'] > 0) & (master_df['Sold 30D'] == 0)].copy()
     if not ghost_df.empty:
         st.dataframe(ghost_df[['Model Number', 'In Shop', 'Last Install Date']].rename(columns={"In Shop": "UNITS APPARENTLY ON RACK", "Last Install Date": "LAST TIME INVOICED"}), hide_index=True, use_container_width=True)
@@ -806,20 +762,16 @@ with tab3:
         st.success("Clean Data! No dormant 'Ghost Stock' anomalies detected between counting apps and sales history.")
     st.write("---")
 
-    # NEW SANDBOX FEATURE 15: HISTORICAL SINGLE-DAY MAX
+    # SANDBOX FEATURE 15: HISTORICAL SINGLE-DAY MAX
     st.subheader("🏔️ 15. Historical Single-Day Max (Worst-Case Buffer)")
-    st.write("Finds the absolute highest volume of a single model installed in a single day to establish your non-negotiable minimum safety floor:")
-    
     if not df_installed.empty:
         daily_install_totals = df_installed.groupby(['Model Number', 'Install Date'])['Quantity'].sum().reset_index()
         max_single_day = daily_install_totals.groupby('Model Number')['Quantity'].max().reset_index()
         max_single_day.columns = ["MODEL NUMBER", "RECORD MAX INSTALLED IN A SINGLE DAY"]
         
-        # Merge against current stock to see if you are prepared for a worst-case day today
         max_single_day['CURRENT STOCK ON HAND'] = max_single_day['MODEL NUMBER'].map(inventory_lookup).fillna(0).astype(int)
         max_single_day['PREPARED FOR WORST DAY?'] = max_single_day.apply(lambda x: "🟢 YES" if x['CURRENT STOCK ON HAND'] >= x['RECORD MAX INSTALLED IN A SINGLE DAY'] else "🔴 NO", axis=1)
         
-        # Filter to only show relevant models
         valid_models = master_df['Model Number'].tolist()
         max_single_day = max_single_day[max_single_day['MODEL NUMBER'].isin(valid_models)].sort_values(by="RECORD MAX INSTALLED IN A SINGLE DAY", ascending=False)
         
@@ -828,10 +780,8 @@ with tab3:
         st.info("Insufficient data to process single-day maximums.")
     st.write("---")
 
-    # NEW SANDBOX FEATURE 16: DORMANT / OVERDUE PIPELINE ALERTS
+    # SANDBOX FEATURE 16: DORMANT / OVERDUE PIPELINE ALERTS
     st.subheader("⏰ 16. Dormant / Overdue Pipeline Alerts")
-    st.write("Instantly tracks 'Estimate Accepted' records where the scheduled installation date has already passed. These jobs may be tying up reserved safety stock unnecessarily:")
-    
     if not df_estimates.empty:
         today_dt = pd.to_datetime(datetime.date.today())
         overdue_df = df_estimates[df_estimates['Install Date'] < today_dt].copy()
@@ -847,22 +797,18 @@ with tab3:
         st.success("No accepted estimates on file.")
     st.write("---")
 
-    # NEW SANDBOX FEATURE 17: MONDAY "WEEKEND BACKLOG" SPIKE ANALYSIS
+    # SANDBOX FEATURE 17: MONDAY "WEEKEND BACKLOG" SPIKE ANALYSIS
     st.subheader("📊 17. Monday 'Weekend Backlog' Spike Analysis")
-    st.write("Mathematically verify if broken weekend heaters cause a massive, disproportionate inventory strain on Monday mornings:")
-    
     if not df_installed.empty:
         df_installed['Weekday_Name'] = df_installed['Install Date'].dt.day_name()
         df_installed['Weekday_Index'] = df_installed['Install Date'].dt.weekday
         
-        # Remove Sundays from calculations as they are blackout dates
         weekday_stats = df_installed[df_installed['Weekday_Index'] != 6].groupby(['Weekday_Name', 'Weekday_Index'])['Quantity'].sum().reset_index()
         weekday_stats = weekday_stats.sort_values(by="Weekday_Index", ascending=True)
         
         total_vol = weekday_stats['Quantity'].sum()
         weekday_stats['SHARE OF TOTAL WEEKLY LOAD'] = (weekday_stats['Quantity'] / total_vol) * 100
         
-        # Identify if Monday is the highest
         monday_vol = weekday_stats[weekday_stats['Weekday_Name'] == 'Monday']['Quantity'].sum()
         other_days_avg = weekday_stats[weekday_stats['Weekday_Name'] != 'Monday']['Quantity'].mean()
         
@@ -876,11 +822,8 @@ with tab3:
         st.info("Insufficient historical data to process daily volume loads.")
     st.write("---")
 
-    # UPGRADED SANDBOX FEATURE 18: INVENTORY TURNOVER RATIO
+    # SANDBOX FEATURE 18: INVENTORY TURNOVER RATIO
     st.subheader("🔄 18. Inventory Turnover Ratio (30-Day Flip)")
-    st.write("Calculates how many times an entire specific rack of water heaters completely 'flips' or replaces itself in a month (Higher score equals better cash flow):")
-    
-    # Pre-compute unique last two install dates per model
     df_installed_clean = df_installed.dropna(subset=['Install Date']).sort_values(by='Install Date', ascending=False)
     last_two_dates_lookup = {}
     
@@ -916,4 +859,70 @@ with tab3:
         
     turnover_df = pd.DataFrame(turnover_data).sort_values(by="CALCULATED TURNOVER RATIO", ascending=False)
     st.dataframe(turnover_df.style.format({"CALCULATED TURNOVER RATIO": "{:.2f}"}), hide_index=True, use_container_width=True)
+    st.write("---")
+
+    # NEW SANDBOX FEATURE 19: MOST VOLATILE DEMAND INDICATOR
+    st.subheader("📈 19. Most Volatile Demand Indicator (Weekly Chaos Score)")
+    st.write("Calculates the standard deviation of weekly sales to flag models with chaotic, unpredictable demand that require larger safety stock cushions:")
+    
+    if not df_installed.empty and 'Install Date' in df_installed.columns:
+        df_vol = df_installed.dropna(subset=['Install Date']).copy()
+        df_vol['Week_Period'] = df_vol['Install Date'].dt.to_period('W')
+        
+        # Aggregate quantity per week per model
+        weekly_model_sales = df_vol.groupby(['Model Number', 'Week_Period'])['Quantity'].sum().reset_index()
+        
+        # Calculate mean and standard deviation of those weekly sales
+        volatility_stats = weekly_model_sales.groupby('Model Number')['Quantity'].agg(['mean', 'std']).reset_index()
+        
+        # Fill NaNs in std (happens if only 1 week of sales exists) with 0
+        volatility_stats['std'] = volatility_stats['std'].fillna(0)
+        
+        volatility_data = []
+        for _, r in volatility_stats.iterrows():
+            model = r['Model Number']
+            avg_wk = r['mean']
+            std_wk = r['std']
+            
+            # Filter to active models in master_df to keep it relevant
+            if model in master_df['Model Number'].values:
+                cv = std_wk / avg_wk if avg_wk > 0 else 0
+                
+                if cv >= 1.0:
+                    status = "🔴 HIGH VOLATILITY (Unpredictable)"
+                    rec = "Increase safety stock heavily. Prone to sudden spikes."
+                elif cv >= 0.5:
+                    status = "🟡 MODERATE VOLATILITY"
+                    rec = "Standard safety stock rules apply."
+                else:
+                    status = "🟢 LOW VOLATILITY (Stable)"
+                    rec = "Predictable demand. Safe to lean out inventory."
+                    
+                if avg_wk > 0 and cv > 0: # Exclude dead models or single-week wonders
+                    volatility_data.append({
+                        "MODEL NUMBER": model,
+                        "AVG WEEKLY VOLUME": avg_wk,
+                        "STD DEVIATION (± UNITS)": std_wk,
+                        "CHAOS SCORE (CV)": cv,
+                        "VOLATILITY RATING": status,
+                        "LOGISTICS RECOMMENDATION": rec
+                    })
+                    
+        if volatility_data:
+            vol_df = pd.DataFrame(volatility_data).sort_values(by="CHAOS SCORE (CV)", ascending=False)
+            def style_vol(val):
+                if "HIGH" in str(val): return 'background-color: #fce8e6; color: #a83232; font-weight: bold;'
+                if "MODERATE" in str(val): return 'background-color: #fff3cd; color: #856404;'
+                if "LOW" in str(val): return 'background-color: #d4edda; color: #155724;'
+                return ''
+            
+            st.dataframe(vol_df.style.map(style_vol, subset=["VOLATILITY RATING"]).format({
+                "AVG WEEKLY VOLUME": "{:.1f}",
+                "STD DEVIATION (± UNITS)": "{:.1f}",
+                "CHAOS SCORE (CV)": "{:.2f}"
+            }), hide_index=True, use_container_width=True)
+        else:
+            st.info("Insufficient active weekly sales data to calculate meaningful volatility scores.")
+    else:
+        st.info("Insufficient historical date metrics available.")
     st.write("---")
