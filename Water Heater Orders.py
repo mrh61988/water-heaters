@@ -582,6 +582,7 @@ with tab3:
             continue
             
         model = row['Model Number']
+        last_install_date = row['Last Install Date']
         net_stock = int(row['In Shop']) - int(row['Reserved'])
         daily_vel = (row['Weighted Weekly Avg'] / 6.0) * multiplier_buffer
         
@@ -605,7 +606,14 @@ with tab3:
                 loop_safety += 1
             deadline_str = current_projected_date.strftime("%B %d, %Y")
             
-        calendar_data.append({"MODEL NUMBER": model, "NET AVAILABLE STOCK": net_stock, "DAILY CONSUMPTION VELOCITY": daily_vel, "EXPECTED STOCKOUT DEADLINE": deadline_str, "_raw_days_sort": loop_safety})
+        calendar_data.append({
+            "MODEL NUMBER": model, 
+            "LAST INSTALL DATE": last_install_date, 
+            "NET AVAILABLE STOCK": net_stock, 
+            "DAILY CONSUMPTION VELOCITY": daily_vel, 
+            "EXPECTED STOCKOUT DEADLINE": deadline_str, 
+            "_raw_days_sort": loop_safety
+        })
         
     calendar_df = pd.DataFrame(calendar_data).sort_values(by="_raw_days_sort", ascending=True)
     st.dataframe(calendar_df.drop(columns=["_raw_days_sort"]).style.format({"DAILY CONSUMPTION VELOCITY": "{:.2f}"}), hide_index=True, use_container_width=True)
