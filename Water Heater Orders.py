@@ -876,10 +876,23 @@ with tab3:
         st.info("Insufficient historical data to process daily volume loads.")
     st.write("---")
 
-    # NEW SANDBOX FEATURE 18: INVENTORY TURNOVER RATIO
+    # UPGRADED SANDBOX FEATURE 18: INVENTORY TURNOVER RATIO
     st.subheader("🔄 18. Inventory Turnover Ratio (30-Day Flip)")
     st.write("Calculates how many times an entire specific rack of water heaters completely 'flips' or replaces itself in a month (Higher score equals better cash flow):")
     
+    # Pre-compute unique last two install dates per model
+    df_installed_clean = df_installed.dropna(subset=['Install Date']).sort_values(by='Install Date', ascending=False)
+    last_two_dates_lookup = {}
+    
+    for m in master_df['Model Number'].unique():
+        m_dates = df_installed_clean[df_installed_clean['Model Number'] == m]['Install Date'].dt.strftime('%m/%d/%Y').unique()
+        if len(m_dates) >= 2:
+            last_two_dates_lookup[m] = f"{m_dates[0]}, {m_dates[1]}"
+        elif len(m_dates) == 1:
+            last_two_dates_lookup[m] = f"{m_dates[0]}"
+        else:
+            last_two_dates_lookup[m] = "No Record"
+
     turnover_data = []
     for _, r in master_df.iterrows():
         sold_30 = int(r['Sold 30D'])
@@ -894,6 +907,7 @@ with tab3:
             
         turnover_data.append({
             "MODEL NUMBER": r['Model Number'],
+            "LAST TWO INSTALL DATES": last_two_dates_lookup.get(r['Model Number'], "No Record"),
             "UNITS SOLD (LAST 30 DAYS)": sold_30,
             "UNITS CURRENTLY SITTING IN WAREHOUSE": in_shop,
             "CALCULATED TURNOVER RATIO": ratio,
